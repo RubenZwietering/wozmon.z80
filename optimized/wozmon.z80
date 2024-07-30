@@ -17,8 +17,8 @@ mode: 				ds 1			; $00=XAM, $74=STOR, $B8=BLOCK XAM
 ; register c is now what used to be the X register
 ; register b is now what used to be the Y register
 
-section "wozmon other variables", wramx, align[8]
-in: 				ds $100			;  Input buffer
+section "wozmon other variables", wramx, align[8, 1]
+in: 				ds $ff			;  Input buffer
 
 section "wozmon code", romx
 	wozmon.notcr
@@ -26,7 +26,7 @@ section "wozmon code", romx
 		jr z, wozmon.backspace	; Yes.
 		cp $1b				; ESC?
 		jr z, wozmon.escape		; Yes.
-		inc b				; Advance text index.
+		dec b				; Advance text index.
 		jr nz, wozmon.nextchar 	; Auto ESC if > 255.
 wozmon:
 	.escape
@@ -35,11 +35,9 @@ wozmon:
 	.getline
 		ld a, "\n"			; CR.
 		call chrout			; Output it.
-		ld b, $01			; Initialize text index.
+		ld b, $fe			; Initialize text index.
 	.backspace
-		dec b				; Back up text index.
-		ld a, $ff
-		cp b
+		inc b				; Back up text index.
 		jr z, .getline 		; Beyond start of line, reinitialize.
 	.nextchar
 		call chrin			; Load character.
@@ -49,15 +47,15 @@ wozmon:
 		call chrout 		; Display character.
 		cp "\n"				; LF?
 		jr nz, .notcr 		; No.
-		ld b, $ff 			; Reset text index.
 		xor a 				; For XAM mode.
+		ld b, a 			; Reset text index.
 	.setblock
 		add a
 	.setstor
 		add a				; TODO: check -> Leaves $7B if setting STOR mode.
 		ldh [mode], a 		; $00 = XAM, $74 = STOR, $B8 = BLOK XAM.
 	.blskip
-		inc b 				; Advance text index.
+		dec b 				; Advance text index.
 	.nextitem
 		ld l, b
 		ld h, high(in)
@@ -100,7 +98,7 @@ wozmon:
 		rl [hl] 			; Rotate into MSD’s.
 		dec c 				; Done 4 shifts?
 		jr nz, .hexshift 	; No, loop.
-		inc b 				; Advance text index.
+		dec b 				; Advance text index.
 		jr .nexthex 		; Check next character for hex.
 	.nothex
 		ldh a, [bsav]
