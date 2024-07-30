@@ -110,12 +110,8 @@ wozmon:
 		ldh a, [mode]
 		bit 6, a 			; Test MODE byte.
 		jr z, .notstor 		; B6=1 STOR, 0 for XAM and BLOCK XAM
-		ld h, d
-		ld a, e
-		add c
-		ld l, a
 		ldh a, [lo] 		; LSD’s of hex data.
-		ld [hl], a 			; Store at current ‘store index’.
+		ld [de], a 			; Store at current ‘store index’.
 		inc de 				; Increment store index.
 	.tonextitem
 		jr .nextitem 		; Get next command item.
@@ -144,11 +140,7 @@ wozmon:
 	.prdata
 		ld a, " " 			; Blank.
 		call chrout 		; Output it.
-		ld h, d
-		ld a, e
-		add c
-		ld l, a
-		ld a, [hl] 			; Get data byte at ‘examine index’.
+		ld a, [de] 			; Get data byte at ‘examine index’.
 		call .prbyte 		; Output it in hex format.
 	.xamnext
 		ld a, c
