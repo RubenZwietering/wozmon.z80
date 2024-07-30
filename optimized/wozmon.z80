@@ -51,7 +51,6 @@ wozmon:
 		jr nz, .notcr 		; No.
 		ld b, $ff 			; Reset text index.
 		xor a 				; For XAM mode.
-		ld c, a 			; 0->c.
 	.setblock
 		add a
 	.setstor
@@ -72,7 +71,7 @@ wozmon:
 		jr z, .setstor 		; Yes. Set STOR mode.
 		cp "R" 				; "R"?
 		jr z, .run 			; Yes. Run user program.
-		ld a, c
+		xor a
 		ldh [lo], a 		; $00->L.
 		ldh [hi], a 		;  and H.
 		ld a, b
@@ -126,7 +125,6 @@ wozmon:
 		ld e, a
 		ldh a, [hi]
 		ld d, a
-		ld c, 0				; TODO: necessary?
 	.nxtprnt
 		jr nz, .prdata 		; NE means no address to print.
 		ld a, "\n" 			; LF.
@@ -143,7 +141,7 @@ wozmon:
 		ld a, [de] 			; Get data byte at ‘examine index’.
 		call .prbyte 		; Output it in hex format.
 	.xamnext
-		ld a, c
+		xor a
 		ldh [mode], a 		; 0->MODE (XAM mode).
 		ld a, e
 		ld hl, lo
