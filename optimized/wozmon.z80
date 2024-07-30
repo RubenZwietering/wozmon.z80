@@ -10,7 +10,7 @@ lo: 				ds 1			; Hex value parsing Low
 hi: 				ds 1			; Hex value parsing High
 ysav: 				ds 1			; Used to see if hex value is given
 mode: 				ds 1			; $00=XAM, $74=STOR, $B8=BLOCK XAM
-x: 					ds 1
+; c is now what used to be the X register
 y: 					ds 1
 
 section "wozmon other variables", wramx, align[8]
@@ -53,8 +53,8 @@ reset:
 		jr nz, .notcr 		; No.
 		ld a, $ff 			; Reset text index.
 		ldh [y], a
-		ld a, $00 			; For XAM mode.
-		ldh [x], a 			; 0->X.
+		xor a 				; For XAM mode.
+		ld c, a 			; 0->c.
 	.setblock
 		add a
 	.setstor
@@ -77,7 +77,7 @@ reset:
 		jr z, .setstor 		; Yes. Set STOR mode.
 		cp "R" 				; "R"?
 		jr z, .run 			; Yes. Run user program.
-		ldh a, [x]
+		ld a, c
 		ldh [lo], a 		; $00->L.
 		ldh [hi], a 		;  and H.
 		ldh a, [y]
@@ -98,16 +98,14 @@ reset:
 		add a 				; Hex digit to MSD of A.
 		add a
 		add a
-		ld hl, x
-		ld [hl], 4 			; Shift count.
+		ld c, 4 			; Shift count.
 	.hexshift
 		add a 				; Hex digit left, MSB to carry.
 		ld hl, lo
 		rl [hl] 			; Rotate into LSD.
 		ld hl, hi
 		rl [hl] 			; Rotate into MSD’s.
-		ld hl, x
-		dec [hl] 			; Done 4 shifts?
+		dec c 				; Done 4 shifts?
 		jr nz, .hexshift 	; No, loop.
 		ld hl, y
 		inc [hl] 			; Advance text index.
@@ -123,9 +121,7 @@ reset:
 		ldh a, [sth]
 		ld h, a
 		ldh a, [stl]
-		ld l, a
-		ldh a, [x]
-		add l
+		add c
 		ld l, a
 		ldh a, [lo] 		; LSD’s of hex data.
 		ld [hl], a 			; Store at current ‘store index’.
@@ -145,31 +141,29 @@ reset:
 	.notstor
 		bit 7, [hl]
 		jr nz, .xamnext 	; B7=0 for XAM, 1 for BLOCK XAM.
-		ld a, $02 			; Byte count.
-		ldh [x], a
+		ld c, $02 			; Byte count.
 	.setadr
 		ld hl, lo-1
-		ldh a, [x]
+		ld a, c
 		add l
 		ld l, a
 		ld a, [hl] 			; Copy hex data to
 		push af
 		ld hl, stl-1
-		ldh a, [x]
+		ld a, c
 		add l
 		ld l, a
 		pop af
 		ld [hl], a 			;  ‘store index’.
 		push af
 		ld hl, xaml-1
-		ldh a, [x]
+		ld a, c
 		add l
 		ld l, a
 		pop af
 		ld [hl], a 			; And to ‘XAM index’.
-		ld hl, x
-		dec [hl] 			; Next of 2 bytes.
-		jr nz, .setadr 		; Loop unless X=0.
+		dec c 				; Next of 2 bytes.
+		jr nz, .setadr 		; Loop unless c=0.
 	.nxtprnt
 		jr nz, .prdata 		; NE means no address to print.
 		ld a, "\n" 			; LF.
@@ -186,14 +180,12 @@ reset:
 		ldh a, [xamh]
 		ld h, a
 		ldh a, [xaml]
-		ld l, a
-		ldh a, [x]
-		add l
+		add c
 		ld l, a
 		ld a, [hl] 			; Get data byte at ‘examine index’.
 		call .prbyte 		; Output it in hex format.
 	.xamnext
-		ldh a, [x]
+		ld a, c
 		ldh [mode], a 		; 0->MODE (XAM mode).
 		ldh a, [xaml]
 		ld hl, lo
