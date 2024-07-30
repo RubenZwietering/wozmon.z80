@@ -105,7 +105,6 @@ wozmon:
 		jr z, .notstor 		; B6=1 STOR, 0 for XAM and BLOCK XAM
 		ld a, e 			; LSD’s of hex data.
 		ldi [hl], a 		; Store at current ‘store index’. Increment store index.
-	.tonextitem
 		jr .nextitem 		; Get next command item.
 	.run
 		jp hl 				; Run at current XAM index.
@@ -136,7 +135,7 @@ wozmon:
 		cp e 				; Compare ‘examine index’ to hex data.
 		ld a, h
 		sbc d
-		jr nc, .tonextitem 	; Not less, so no more data to output.
+		jr nc, .nextitem 	; Not less, so no more data to output.
 		inc hl
 		ld a, l 			; Check low-order ‘examine index’ byte
 		and $03 			; For MOD 4=0
