@@ -20,87 +20,87 @@ section "wozmon code", romx
 export reset
 reset:
 	ld a, $1b
-notcr:
+	.notcr
 		cp $08				; "\b"?
-		jr z, backspace	; Yes.
+		jr z, .backspace	; Yes.
 		cp $1b				; ESC?
-		jr z, escape		; Yes.
+		jr z, .escape		; Yes.
 		ld hl, y
 		inc [hl]			; Advance text index.
-		jr nz, nextchar 	; Auto ESC if > 255.
-escape:
+		jr nz, .nextchar 	; Auto ESC if > 255.
+	.escape
 		ld a, "\\"			; "\".
-		call echo			; Output it.
-getline:
+		call .echo			; Output it.
+	.getline
 		ld a, "\n"			; CR.
-		call echo			; Output it.
+		call .echo			; Output it.
 		ld a, $01			; Initialize text index.
 		ldh [y], a
-backspace:
-		ld hl, y		
+	.backspace
+		ld hl, y
 		dec [hl]			; Back up text index.
 		ld a, [hl]
 		cp $ff
-		jr z, getline 		; Beyond start of line, reinitialize.
-nextchar:
-		call chrin			; Load character.
+		jr z, .getline 		; Beyond start of line, reinitialize.
+	.nextchar
+		call chrin2			; Load character.
 		ld hl, y
 		ld l, [hl]
 		ld h, high(in)
 		ld [hl], a 			; Add to text buffer.
-		call echo 			; Display character.
+		call .echo 			; Display character.
 		cp "\n"				; LF?
-		jr nz, notcr 		; No.
+		jr nz, .notcr 		; No.
 		ld a, $ff 			; Reset text index.
 		ldh [y], a
 		ld a, $00 			; For XAM mode.
 		ldh [x], a 			; 0->X.
-setblock:
+	.setblock
 		sla a
-setstor:
+	.setstor
 		sla a				; TODO: check -> Leaves $7B if setting STOR mode.
 		ldh [mode], a 		; $00 = XAM, $74 = STOR, $B8 = BLOK XAM.
-blskip:
+	.blskip
 		ld hl, y
 		inc [hl] 			; Advance text index.
-nextitem:
+	.nextitem
 		ld hl, y
 		ld l, [hl]
 		ld h, high(in)
 		ld a, [hl] 			; Get character.
 		cp "\n" 			; LF?
-		jr z, getline 		; Yes, done this line.
+		jr z, .getline 		; Yes, done this line.
 		cp "." 				; "."?
-		jr c, blskip 		; Skip delimiter.
-		jr z, setblock 		; Set BLOCK XAM mode.
+		jr c, .blskip 		; Skip delimiter.
+		jr z, .setblock 	; Set BLOCK XAM mode.
 		cp ":" 				; ":"?
-		jr z, setstor 		; Yes. Set STOR mode.
+		jr z, .setstor 		; Yes. Set STOR mode.
 		cp "R" 				; "R"?
-		jr z, run 			; Yes. Run user program.
+		jr z, .run 			; Yes. Run user program.
 		ldh a, [x]
-		ldh [lo], a 		; $00->L. 
+		ldh [lo], a 		; $00->L.
 		ldh [hi], a 		;  and H.
 		ldh a, [y]
 		ldh [ysav], a 		; Save Y for comparison.
-nexthex:
+	.nexthex
 		ld hl, y
 		ld l, [hl]
 		ld h, high(in)
 		ld a, [hl] 			; Get character for hex test.
 		xor "0" 			; Map digits to $0-9.
 		cp 10 				; Digit?
-		jr c, dig 			; Yes.
+		jr c, .dig 			; Yes.
 		add $89 			; Map letter "A"-"F" to $FA-FF.
 		cp $fa 				; Hex letter?
-		jr c, nothex 		; No, character not hex.
-dig:
+		jr c, .nothex 		; No, character not hex.
+	.dig
 		sla a
 		sla a 				; Hex digit to MSD of A.
 		sla a
-		sla a   
+		sla a
 		ld hl, x
 		ld [hl], 4 			; Shift count.
-hexshift:
+	.hexshift
 		sla a 				; Hex digit left, MSB to carry.
 		ld hl, lo
 		rl [hl] 			; Rotate into LSD.
@@ -108,18 +108,18 @@ hexshift:
 		rl [hl] 			; Rotate into MSD’s.
 		ld hl, x
 		dec [hl] 			; Done 4 shifts?
-		jr nz, hexshift 	; No, loop.
+		jr nz, .hexshift 	; No, loop.
 		ld hl, y
 		inc [hl] 			; Advance text index.
-		jr nexthex 			; Check next character for hex.
-nothex:
+		jr .nexthex 		; Check next character for hex.
+	.nothex
 		ldh a, [ysav]
 		ld hl, y
 		cp [hl] 			; Check if L, H empty (no hex digits).
-		jp z, escape 		; Yes, generate ESC sequence.
+		jp z, .escape 		; Yes, generate ESC sequence.
 		ld hl, mode
 		bit 6, [hl] 		; Test MODE byte.
-		jr z, notstor 		; B6=1 STOR, 0 for XAM and BLOCK XAM
+		jr z, .notstor 		; B6=1 STOR, 0 for XAM and BLOCK XAM
 		ldh a, [sth]
 		ld h, a
 		ldh a, [stl]
@@ -131,24 +131,24 @@ nothex:
 		ld [hl], a 			; Store at current ‘store index’.
 		ld hl, stl
 		inc [hl] 			; Increment store index.
-		jp nz, nextitem 	; Get next item. (no carry).
+		jp nz, .nextitem 	; Get next item. (no carry).
 		ld hl, sth
 		inc [hl] 			; Add carry to ‘store index’ high order.
-tonextitem:
-		jp nextitem 		; Get next command item.
-run:
+	.tonextitem
+		jp .nextitem 		; Get next command item.
+	.run
 		ldh a, [xaml]
 		ld l, a
 		ldh a, [xamh]
 		ld h, a
 		jp hl 				; Run at current XAM index.
-notstor:
+	.notstor
 		ld hl, mode
 		bit 7, [hl]
-		jr nz, xamnext 		; B7=0 for XAM, 1 for BLOCK XAM.
+		jr nz, .xamnext 	; B7=0 for XAM, 1 for BLOCK XAM.
 		ld a, $02 			; Byte count.
 		ldh [x], a
-setadr:
+	.setadr
 		ld hl, lo-1
 		ldh a, [x]
 		add l
@@ -170,20 +170,20 @@ setadr:
 		ld [hl], a 			; And to ‘XAM index’.
 		ld hl, x
 		dec [hl] 			; Next of 2 bytes.
-		jr nz, setadr 		; Loop unless X=0.
-nxtprnt:
-		jr nz, prdata 		; NE means no address to print.
+		jr nz, .setadr 		; Loop unless X=0.
+	.nxtprnt
+		jr nz, .prdata 		; NE means no address to print.
 		ld a, "\n" 			; LF.
-		call echo 			; Output it.
+		call .echo 			; Output it.
 		ldh a, [xamh] 		; ‘Examine index’ high-order byte.
-		call prbyte 		; Output it in hex format.
+		call .prbyte 		; Output it in hex format.
 		ldh a, [xaml] 		; Low-order ‘examine index’ byte.
-		call prbyte 		; Output it in hex format.
+		call .prbyte 		; Output it in hex format.
 		ld a, ":" 			; ":".
-		call echo 			; Output it.
-prdata:
-		ld a, " " 			; Blank.  
-		call echo 			; Output it.
+		call .echo 			; Output it.
+	.prdata
+		ld a, " " 			; Blank.
+		call .echo 			; Output it.
 		ldh a, [xamh]
 		ld h, a
 		ldh a, [xaml]
@@ -192,8 +192,8 @@ prdata:
 		add l
 		ld l, a
 		ld a, [hl] 			; Get data byte at ‘examine index’.
-		call prbyte 		; Output it in hex format.
-xamnext:
+		call .prbyte 		; Output it in hex format.
+	.xamnext
 		ldh a, [x]
 		ldh [mode], a 		; 0->MODE (XAM mode).
 		ldh a, [xaml]
@@ -202,29 +202,29 @@ xamnext:
 		ldh a, [xamh]
 		ld hl, hi
 		sbc [hl]
-		jr nc, tonextitem 	; Not less, so no more data to output.
+		jr nc, .tonextitem 	; Not less, so no more data to output.
 		ld hl, xaml
 		inc [hl]
-		jr nz, mod8chk 		; Increment ‘examine index’.
+		jr nz, .mod8chk 	; Increment ‘examine index’.
 		ld hl, xamh
 		inc [hl]
-mod8chk:
+	.mod8chk
 		ldh a, [xaml] 		; Check low-order ‘examine index’ byte
-		and $07 			;  For MOD 8=0 
-		jr nxtprnt
-prbyte:
+		and $07 			;  For MOD 8=0
+		jr .nxtprnt
+	.prbyte
 		push af 			; Save A for LSD.
 		srl a
-		srl a  
+		srl a
 		srl a 				; MSD to LSD position.
 		srl a
-		call prhex 			; Output hex digit.
+		call .prhex 		; Output hex digit.
 		pop af 				; Restore A.
-prhex:
+	.prhex
 		and $0f 			; Mask LSD for hex print.
 		or "0" 				; Add "0".
 		cp "0"+10 			; Digit?
-		jr c, echo 			; Yes, output it.
+		jr c, .echo 		; Yes, output it.
 		add $07 			; Add offset for letter.
-echo:
-		jp chrout 			; Output character.
+	.echo
+		jp chrout2 			; Output character.
