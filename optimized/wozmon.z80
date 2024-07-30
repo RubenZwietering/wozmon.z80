@@ -4,10 +4,12 @@
 export wozmon
 
 section "wozmon variables", hram
+; note: not sure why there are seperate variables for XAM and ST,
+;       seems to be working fine when they are one and the same.
 ; register e is now what used to be XAML 	; Last "opened" location Low
 ; register d is now what used to be XAMH 	; Last "opened" location High
-stl: 				ds 1			; Store address Low
-sth: 				ds 1			; Store address High
+; register e is now what used to be STL 	; Store address Low
+; register d is now what used to be STH 	; Store address High
 lo: 				ds 1			; Hex value parsing Low
 hi: 				ds 1			; Hex value parsing High
 bsav: 				ds 1			; Used to see if hex value is given
@@ -108,18 +110,13 @@ wozmon:
 		ldh a, [mode]
 		bit 6, a 			; Test MODE byte.
 		jr z, .notstor 		; B6=1 STOR, 0 for XAM and BLOCK XAM
-		ldh a, [sth]
-		ld h, a
-		ldh a, [stl]
+		ld h, d
+		ld a, e
 		add c
 		ld l, a
 		ldh a, [lo] 		; LSD’s of hex data.
 		ld [hl], a 			; Store at current ‘store index’.
-		ld hl, stl
-		inc [hl] 			; Increment store index.
-		jr nz, .nextitem 	; Get next item. (no carry).
-		ld hl, sth
-		inc [hl] 			; Add carry to ‘store index’ high order.
+		inc de 				; Increment store index.
 	.tonextitem
 		jr .nextitem 		; Get next command item.
 	.run
@@ -130,10 +127,8 @@ wozmon:
 		bit 7, a
 		jr nz, .xamnext 	; B7=0 for XAM, 1 for BLOCK XAM.
 		ldh a, [lo]
-		ldh [stl], a
 		ld e, a
 		ldh a, [hi]
-		ldh [sth], a
 		ld d, a
 		ld c, 0				; TODO: necessary?
 	.nxtprnt
