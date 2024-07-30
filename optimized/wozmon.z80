@@ -1,6 +1,8 @@
 ;  The WOZ Monitor for the Apple 1
 ;  Written by Steve Wozniak in 1976
 
+export wozmon
+
 section "wozmon variables", hram
 xaml: 				ds 1			; Last "opened" location Low
 xamh: 				ds 1			; Last "opened" location High
@@ -17,16 +19,14 @@ section "wozmon other variables", wramx, align[8]
 in: 				ds $100			;  Input buffer
 
 section "wozmon code", romx
-export reset
-reset:
-	ld a, $1b
-	.notcr
+	wozmon.notcr
 		cp $08				; "\b"?
-		jr z, .backspace	; Yes.
+		jr z, wozmon.backspace	; Yes.
 		cp $1b				; ESC?
-		jr z, .escape		; Yes.
+		jr z, wozmon.escape		; Yes.
 		inc b				; Advance text index.
-		jr nz, .nextchar 	; Auto ESC if > 255.
+		jr nz, wozmon.nextchar 	; Auto ESC if > 255.
+wozmon:
 	.escape
 		ld a, "\\"			; "\".
 		call chrout			; Output it.
