@@ -175,7 +175,7 @@ wozmon:
 		inc [hl]
 	.mod8chk
 		ldh a, [xaml] 		; Check low-order ‘examine index’ byte
-		and $07 			;  For MOD 8=0
+		and $03 			;  For MOD 4=0
 		jr .nxtprnt
 	.prbyte
 		ld l, a 			; Save A for LSD.
