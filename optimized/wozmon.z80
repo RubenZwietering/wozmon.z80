@@ -101,8 +101,7 @@ wozmon:
 		bit 6, a 			; Test MODE byte.
 		jr z, .notstor 		; B6=1 STOR, 0 for XAM and BLOCK XAM
 		ld a, e 			; LSD’s of hex data.
-		ld [hl], a 			; Store at current ‘store index’.
-		inc hl 				; Increment store index.
+		ldi [hl], a 		; Store at current ‘store index’. Increment store index.
 	.tonextitem
 		jr .nextitem 		; Get next command item.
 	.run
