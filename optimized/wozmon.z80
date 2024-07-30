@@ -104,9 +104,9 @@ reset:
 	.nothex
 		ldh a, [bsav]
 		cp b 				; Check if L, H empty (no hex digits).
-		jp z, .escape 		; Yes, generate ESC sequence.
-		ld hl, mode
-		bit 6, [hl] 		; Test MODE byte.
+		jr z, .escape 		; Yes, generate ESC sequence.
+		ldh a, [mode]
+		bit 6, a 			; Test MODE byte.
 		jr z, .notstor 		; B6=1 STOR, 0 for XAM and BLOCK XAM
 		ldh a, [sth]
 		ld h, a
@@ -117,11 +117,11 @@ reset:
 		ld [hl], a 			; Store at current ‘store index’.
 		ld hl, stl
 		inc [hl] 			; Increment store index.
-		jp nz, .nextitem 	; Get next item. (no carry).
+		jr nz, .nextitem 	; Get next item. (no carry).
 		ld hl, sth
 		inc [hl] 			; Add carry to ‘store index’ high order.
 	.tonextitem
-		jp .nextitem 		; Get next command item.
+		jr .nextitem 		; Get next command item.
 	.run
 		ldh a, [xaml]
 		ld l, a
@@ -129,31 +129,15 @@ reset:
 		ld h, a
 		jp hl 				; Run at current XAM index.
 	.notstor
-		bit 7, [hl]
+		bit 7, a
 		jr nz, .xamnext 	; B7=0 for XAM, 1 for BLOCK XAM.
-		ld c, $02 			; Byte count.
-	.setadr
-		ld hl, lo-1
-		ld a, c
-		add l
-		ld l, a
-		ld a, [hl] 			; Copy hex data to
-		push af
-		ld hl, stl-1
-		ld a, c
-		add l
-		ld l, a
-		pop af
-		ld [hl], a 			;  ‘store index’.
-		push af
-		ld hl, xaml-1
-		ld a, c
-		add l
-		ld l, a
-		pop af
-		ld [hl], a 			; And to ‘XAM index’.
-		dec c 				; Next of 2 bytes.
-		jr nz, .setadr 		; Loop unless c=0.
+		ldh a, [lo]
+		ldh [stl], a
+		ldh [xaml], a
+		ldh a, [hi]
+		ldh [sth], a
+		ldh [xamh], a
+		ld c, 0				; TODO: necessary?
 	.nxtprnt
 		jr nz, .prdata 		; NE means no address to print.
 		ld a, "\n" 			; LF.
@@ -194,10 +178,10 @@ reset:
 		and $07 			;  For MOD 8=0
 		jr .nxtprnt
 	.prbyte
-		push af 			; Save A for LSD.
+		ld l, a 			; Save A for LSD.
 		swap a 				; MSD to LSD position.
 		call .prhex 		; Output hex digit.
-		pop af 				; Restore A.
+		ld a, l 			; Restore A.
 	.prhex
 		and $0f 			; Mask LSD for hex print.
 		or "0" 				; Add "0".
