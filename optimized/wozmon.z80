@@ -6,18 +6,18 @@ export wozmon
 section "wozmon variables", hram
 ; note: not sure why there are seperate variables for XAM and ST,
 ;       seems to be working fine when they are one and the same.
-; register l is now what used to be XAML 	; Last "opened" location Low
-; register h is now what used to be XAMH 	; Last "opened" location High
-; register l is now what used to be STL 	; Store address Low
-; register h is now what used to be STH 	; Store address High
-; register e is now what used to be L 		; Hex value parsing Low
-; register d is now what used to be H 		; Hex value parsing High
-bsav: 				ds 1			; Used to see if hex value is given
-mode: 				ds 1			; $00=XAM, $74=STOR, $B8=BLOCK XAM
-; register b is now what used to be the X register
-; register c is now what used to be the Y register
+; register ’l’ is now what used to be XAML 		; Last "opened" location Low
+; register ’h’ is now what used to be XAMH 		; Last "opened" location High
+; register ’l’ is now what used to be STL 		; Store address Low
+; register ’h’ is now what used to be STH 		; Store address High
+; register ’e’ is now what used to be L 		; Hex value parsing Low
+; register ’d’ is now what used to be H 		; Hex value parsing High
+csav: 				ds 1						; Used to see if hex value is given
+mode: 				ds 1						; $00=XAM, $74=STOR, $B8=BLOCK XAM
+; register ’b’ is now what used to be the X register
+; register ’c’ is now what used to be the Y register
 
-section "wozmon other variables", wramx, align[8, 1]
+section "wozmon input buffer", wramx, align[8, 1]
 in: 				ds $ff			;  Input buffer
 
 section "wozmon code", romx
@@ -27,7 +27,7 @@ section "wozmon code", romx
 		cp $1b				; ESC?
 		jr z, wozmon.escape		; Yes.
 		dec c				; Advance text index.
-		jr nz, wozmon.nextchar 	; Auto ESC if > 255.
+		jr nz, wozmon.nextchar 	; Auto ESC if == 0.
 wozmon:
 		ld b, high(in)
 	.escape
@@ -43,15 +43,18 @@ wozmon:
 	.nextchar
 		call chrin			; Load character.
 		ld [bc], a 			; Add to text buffer.
+	; This is the only call to chrout where the ’a’ register cannot be modified
+	; --- push af
 		call chrout 		; Display character.
+	; --- pop af
 		cp "\n"				; LF?
 		jr nz, .notcr 		; No.
 		xor a 				; For XAM mode.
 		ld c, a 			; Reset text index.
 	.setblock
-		add a
+		add a 				; Leaves $B8 if setting BLOK XAM mode.
 	.setstor
-		add a				; TODO: check -> Leaves $7B if setting STOR mode.
+		add a				; Leaves $74 if setting STOR mode.
 		ldh [mode], a 		; $00 = XAM, $74 = STOR, $B8 = BLOK XAM.
 	.blskip
 		dec c 				; Advance text index.
@@ -66,9 +69,9 @@ wozmon:
 		jr z, .setstor 		; Yes. Set STOR mode.
 		cp "R" 				; "R"?
 		jr z, .run 			; Yes. Run user program.
-		ld de, 0 			; ; $00->L and H.
+		ld de, 0 			; $00->Hex value parsing.
 		ld a, c
-		ldh [bsav], a 		; Save c for comparison.
+		ldh [csav], a 		; Save ’c’ for comparison.
 	.nexthex
 		ld a, [bc] 			; Get character for hex test.
 		xor "0" 			; Map digits to $0-9.
@@ -79,7 +82,7 @@ wozmon:
 		jr c, .nothex 		; No, character not hex.
 	.dig
 		add a
-		add a 				; Hex digit to MSD of A.
+		add a 				; Hex digit to MSD of ’a’.
 		add a
 		add a
 		push bc
@@ -94,8 +97,8 @@ wozmon:
 		dec c 				; Advance text index.
 		jr .nexthex 		; Check next character for hex.
 	.nothex
-		ldh a, [bsav]
-		cp c 				; Check if L, H empty (no hex digits).
+		ldh a, [csav]
+		cp c 				; Check if ’de’ empty (no hex digits).
 		jr z, .escape 		; Yes, generate ESC sequence.
 		ldh a, [mode]
 		bit 6, a 			; Test MODE byte.
@@ -136,13 +139,13 @@ wozmon:
 		jr nc, .tonextitem 	; Not less, so no more data to output.
 		inc hl
 		ld a, l 			; Check low-order ‘examine index’ byte
-		and $03 			;  For MOD 4=0
+		and $03 			; For MOD 4=0
 		jr .nxtprnt
 	.prbyte
-		push af 			; Save A for LSD.
+		push af 			; Save ’a’ for LSD.
 		swap a 				; MSD to LSD position.
 		call .prhex 		; Output hex digit.
-		pop af 				; Restore A.
+		pop af 				; Restore ’a’.
 	.prhex
 		and $0f 			; Mask LSD for hex print.
 		or "0" 				; Add "0".
