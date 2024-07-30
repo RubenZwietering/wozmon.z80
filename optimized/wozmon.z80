@@ -10,8 +10,8 @@ section "wozmon variables", hram
 ; register d is now what used to be XAMH 	; Last "opened" location High
 ; register e is now what used to be STL 	; Store address Low
 ; register d is now what used to be STH 	; Store address High
-lo: 				ds 1			; Hex value parsing Low
-hi: 				ds 1			; Hex value parsing High
+; register l is now what used to be L 		; Hex value parsing Low
+; register h is now what used to be H 		; Hex value parsing High
 bsav: 				ds 1			; Used to see if hex value is given
 mode: 				ds 1			; $00=XAM, $74=STOR, $B8=BLOCK XAM
 ; register b is now what used to be the X register
@@ -67,9 +67,7 @@ wozmon:
 		jr z, .setstor 		; Yes. Set STOR mode.
 		cp "R" 				; "R"?
 		jr z, .run 			; Yes. Run user program.
-		xor a
-		ldh [lo], a 		; $00->L.
-		ldh [hi], a 		;  and H.
+		ld hl, 0 			; ; $00->L and H.
 		ld a, c
 		ldh [bsav], a 		; Save c for comparison.
 	.nexthex
@@ -89,10 +87,8 @@ wozmon:
 		ld b, 4 			; Shift count.
 	.hexshift
 		add a 				; Hex digit left, MSB to carry.
-		ld hl, lo
-		rl [hl] 			; Rotate into LSD.
-		ld hl, hi
-		rl [hl] 			; Rotate into MSD’s.
+		rl l 				; Rotate into LSD.
+		rl h 				; Rotate into MSD’s.
 		dec b 				; Done 4 shifts?
 		jr nz, .hexshift 	; No, loop.
 		dec c 				; Advance text index.
@@ -104,7 +100,7 @@ wozmon:
 		ldh a, [mode]
 		bit 6, a 			; Test MODE byte.
 		jr z, .notstor 		; B6=1 STOR, 0 for XAM and BLOCK XAM
-		ldh a, [lo] 		; LSD’s of hex data.
+		ld a, l 			; LSD’s of hex data.
 		ld [de], a 			; Store at current ‘store index’.
 		inc de 				; Increment store index.
 	.tonextitem
@@ -116,10 +112,8 @@ wozmon:
 	.notstor
 		bit 7, a
 		jr nz, .xamnext 	; B7=0 for XAM, 1 for BLOCK XAM.
-		ldh a, [lo]
-		ld e, a
-		ldh a, [hi]
-		ld d, a
+		ld e, l
+		ld d, h
 	.nxtprnt
 		jr nz, .prdata 		; NE means no address to print.
 		ld a, "\n" 			; LF.
@@ -139,11 +133,9 @@ wozmon:
 		xor a
 		ldh [mode], a 		; 0->MODE (XAM mode).
 		ld a, e
-		ld hl, lo
-		cp [hl] 			; Compare ‘examine index’ to hex data.
+		cp l 				; Compare ‘examine index’ to hex data.
 		ld a, d
-		ld hl, hi
-		sbc [hl]
+		sbc h
 		jr nc, .tonextitem 	; Not less, so no more data to output.
 		inc de
 		ld a, e 			; Check low-order ‘examine index’ byte
