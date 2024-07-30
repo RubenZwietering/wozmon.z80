@@ -56,9 +56,9 @@ reset:
 		ld a, $00 			; For XAM mode.
 		ldh [x], a 			; 0->X.
 	.setblock
-		sla a
+		add a
 	.setstor
-		sla a				; TODO: check -> Leaves $7B if setting STOR mode.
+		add a				; TODO: check -> Leaves $7B if setting STOR mode.
 		ldh [mode], a 		; $00 = XAM, $74 = STOR, $B8 = BLOK XAM.
 	.blskip
 		ld hl, y
@@ -94,14 +94,14 @@ reset:
 		cp $fa 				; Hex letter?
 		jr c, .nothex 		; No, character not hex.
 	.dig
-		sla a
-		sla a 				; Hex digit to MSD of A.
-		sla a
-		sla a
+		add a
+		add a 				; Hex digit to MSD of A.
+		add a
+		add a
 		ld hl, x
 		ld [hl], 4 			; Shift count.
 	.hexshift
-		sla a 				; Hex digit left, MSB to carry.
+		add a 				; Hex digit left, MSB to carry.
 		ld hl, lo
 		rl [hl] 			; Rotate into LSD.
 		ld hl, hi
@@ -143,7 +143,6 @@ reset:
 		ld h, a
 		jp hl 				; Run at current XAM index.
 	.notstor
-		ld hl, mode
 		bit 7, [hl]
 		jr nz, .xamnext 	; B7=0 for XAM, 1 for BLOCK XAM.
 		ld a, $02 			; Byte count.
@@ -214,10 +213,7 @@ reset:
 		jr .nxtprnt
 	.prbyte
 		push af 			; Save A for LSD.
-		srl a
-		srl a
-		srl a 				; MSD to LSD position.
-		srl a
+		swap a 				; MSD to LSD position.
 		call .prhex 		; Output hex digit.
 		pop af 				; Restore A.
 	.prhex
