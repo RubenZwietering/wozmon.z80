@@ -40,7 +40,7 @@ export reset
 ; 
 ; RESET:          
 reset:
-					ld a, $1b+$80
+					ld a, $1b
 ;                 CLD             ; Clear decimal arithmetic mode.
 ;                 CLI
 ;                 LDY #$7F        ; Mask for DSP data direction register.
@@ -51,11 +51,11 @@ reset:
 ; NOTCR:          
 notcr:
 ;                 CMP #'_'+$80    ; "_"?
-					cp "_"+$80
+					cp $08
 ;                 BEQ BACKSPACE   ; Yes.
 					jr z, backspace
 ;                 CMP #$9B        ; ESC?
-					cp $1b+$80
+					cp $1b
 ;                 BEQ ESCAPE      ; Yes.
 					jr z, escape
 ;                 INY             ; Advance text index.
@@ -66,13 +66,13 @@ notcr:
 ; ESCAPE:         
 escape:
 ;                 LDA #'\'+$80    ; "\".
-					ld a, "\\"+$80
+					ld a, "\\"
 ;                 JSR ECHO        ; Output it.
 					call echo
 ; GETLINE:        
 getline:
 ;                 LDA #$8D        ; CR.
-					ld a, "\r"+$80
+					ld a, "\n"
 ;                 JSR ECHO        ; Output it.
 					call echo
 ;                 LDY #$01        ; Initialize text index.
@@ -101,7 +101,7 @@ nextchar:
 ;                 JSR ECHO        ; Display character.
 					call echo
 ;                 CMP #$8D        ; CR?
-					cp "\r"+$80
+					cp "\n"
 ;                 BNE NOTCR       ; No.
 					jr nz, notcr
 ;                 LDY #$FF        ; Reset text index.
@@ -111,14 +111,15 @@ nextchar:
 					ld a, $00
 ;                 TAX             ; 0->X.
 					ldh [x], a
+setblock:
+					sla a
 ; SETSTOR:        
 setstor:
 ;                 ASL             ; Leaves $7B if setting STOR mode.
 					sla a
 ; SETMODE:        
-setmode:
 ;                 STA MODE        ; $00=XAM, $7B=STOR, $AE=BLOCK XAM.
-					ldh [mode], a
+					ldh [mode], a 	; $00 = XAM, $74 = STOR, $B8 = BLOK XAM.
 ; BLSKIP:         
 blskip:
 ;                 INY             ; Advance text index.
@@ -127,26 +128,26 @@ blskip:
 ; NEXTITEM:       
 nextitem:
 ;                 LDA IN,Y        ; Get character.
-					ldh a, [y]
-					ld l, a
+					ld hl, y
+					ld l, [hl]
 					ld h, high(in)
 					ld a, [hl]
 ;                 CMP #$8D        ; CR?
-					cp "\r"+$80
+					cp "\n"
 ;                 BEQ GETLINE     ; Yes, done this line.
 					jr z, getline
 ;                 CMP #'.'+$80    ; "."?
-					cp "."+$80
+					cp "."
 ;                 BCC BLSKIP      ; Skip delimiter.
 					jr c, blskip
 ;                 BEQ SETMODE     ; Set BLOCK XAM mode.
-					jr z, setmode
+					jr z, setblock
 ;                 CMP #':'+$80    ; ":"?
-					cp ":"+$80
+					cp ":"
 ;                 BEQ SETSTOR     ; Yes. Set STOR mode.
 					jr z, setstor
 ;                 CMP #'R'+$80    ; "R"?
-					cp "R"+$80
+					cp "R"
 ;                 BEQ RUN         ; Yes. Run user program.
 					jr z, run
 ;                 STX L           ; $00->L.
@@ -165,9 +166,9 @@ nexthex:
 					ld h, high(in)
 					ld a, [hl]
 ;                 EOR #$B0        ; Map digits to $0-9.
-					xor "0"+$80
+					xor "0"
 ;                 CMP #$0A        ; Digit?
-					cp $0a
+					cp 10
 ;                 BCC DIG         ; Yes.
 					jr c, dig
 ;                 ADC #$88        ; Map letter "A"-"F" to $FA-FF.
@@ -295,7 +296,7 @@ nxtprnt:
 ;                 BNE PRDATA      ; NE means no address to print.
 					jr nz, prdata
 ;                 LDA #$8D        ; CR.
-					ld a, "\r"+$80
+					ld a, "\n"
 ;                 JSR ECHO        ; Output it.
 					call echo
 ;                 LDA XAMH        ; ‘Examine index’ high-order byte.
@@ -307,13 +308,13 @@ nxtprnt:
 ;                 JSR PRBYTE      ; Output it in hex format.
 					call prbyte
 ;                 LDA #':'+$80    ; ":".
-					ld a, ":"+$80
+					ld a, ":"
 ;                 JSR ECHO        ; Output it.
 					call echo
 ; PRDATA:         
 prdata:
 ;                 LDA #$A0        ; Blank.
-					ld a, " "+$80
+					ld a, " "
 ;                 JSR ECHO        ; Output it.
 					call echo
 ;                 LDA (XAML,X)    ; Get data byte at ‘examine index’.
@@ -381,9 +382,9 @@ prhex:
 ;                 AND #$0F        ; Mask LSD for hex print.
 					and $0f
 ;                 ORA #'0'+$80    ; Add "0".
-					or "0"+$80
+					or "0"
 ;                 CMP #$BA        ; Digit?
-					cp "0"+$80+$0a
+					cp "0"+10
 ;                 BCC ECHO        ; Yes, output it.
 					jr c, echo
 ;                 ADC #$06        ; Add offset for letter.
