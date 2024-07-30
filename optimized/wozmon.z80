@@ -8,10 +8,10 @@ stl: 				ds 1			; Store address Low
 sth: 				ds 1			; Store address High
 lo: 				ds 1			; Hex value parsing Low
 hi: 				ds 1			; Hex value parsing High
-ysav: 				ds 1			; Used to see if hex value is given
+bsav: 				ds 1			; Used to see if hex value is given
 mode: 				ds 1			; $00=XAM, $74=STOR, $B8=BLOCK XAM
-; c is now what used to be the X register
-y: 					ds 1
+; register c is now what used to be the X register
+; register b is now what used to be the Y register
 
 section "wozmon other variables", wramx, align[8]
 in: 				ds $100			;  Input buffer
@@ -25,8 +25,7 @@ reset:
 		jr z, .backspace	; Yes.
 		cp $1b				; ESC?
 		jr z, .escape		; Yes.
-		ld hl, y
-		inc [hl]			; Advance text index.
+		inc b				; Advance text index.
 		jr nz, .nextchar 	; Auto ESC if > 255.
 	.escape
 		ld a, "\\"			; "\".
@@ -34,25 +33,21 @@ reset:
 	.getline
 		ld a, "\n"			; CR.
 		call chrout			; Output it.
-		ld a, $01			; Initialize text index.
-		ldh [y], a
+		ld b, $01			; Initialize text index.
 	.backspace
-		ld hl, y
-		dec [hl]			; Back up text index.
-		ld a, [hl]
-		cp $ff
+		dec b				; Back up text index.
+		ld a, $ff
+		cp b
 		jr z, .getline 		; Beyond start of line, reinitialize.
 	.nextchar
 		call chrin			; Load character.
-		ld hl, y
-		ld l, [hl]
+		ld l, b
 		ld h, high(in)
 		ld [hl], a 			; Add to text buffer.
 		call chrout 		; Display character.
 		cp "\n"				; LF?
 		jr nz, .notcr 		; No.
-		ld a, $ff 			; Reset text index.
-		ldh [y], a
+		ld b, $ff 			; Reset text index.
 		xor a 				; For XAM mode.
 		ld c, a 			; 0->c.
 	.setblock
@@ -61,11 +56,9 @@ reset:
 		add a				; TODO: check -> Leaves $7B if setting STOR mode.
 		ldh [mode], a 		; $00 = XAM, $74 = STOR, $B8 = BLOK XAM.
 	.blskip
-		ld hl, y
-		inc [hl] 			; Advance text index.
+		inc b 				; Advance text index.
 	.nextitem
-		ld hl, y
-		ld l, [hl]
+		ld l, b
 		ld h, high(in)
 		ld a, [hl] 			; Get character.
 		cp "\n" 			; LF?
@@ -80,11 +73,10 @@ reset:
 		ld a, c
 		ldh [lo], a 		; $00->L.
 		ldh [hi], a 		;  and H.
-		ldh a, [y]
-		ldh [ysav], a 		; Save Y for comparison.
+		ld a, b
+		ldh [bsav], a 		; Save b for comparison.
 	.nexthex
-		ld hl, y
-		ld l, [hl]
+		ld l, b
 		ld h, high(in)
 		ld a, [hl] 			; Get character for hex test.
 		xor "0" 			; Map digits to $0-9.
@@ -107,13 +99,11 @@ reset:
 		rl [hl] 			; Rotate into MSD’s.
 		dec c 				; Done 4 shifts?
 		jr nz, .hexshift 	; No, loop.
-		ld hl, y
-		inc [hl] 			; Advance text index.
+		inc b 				; Advance text index.
 		jr .nexthex 		; Check next character for hex.
 	.nothex
-		ldh a, [ysav]
-		ld hl, y
-		cp [hl] 			; Check if L, H empty (no hex digits).
+		ldh a, [bsav]
+		cp b 				; Check if L, H empty (no hex digits).
 		jp z, .escape 		; Yes, generate ESC sequence.
 		ld hl, mode
 		bit 6, [hl] 		; Test MODE byte.
