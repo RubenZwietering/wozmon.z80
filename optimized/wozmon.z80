@@ -1,407 +1,230 @@
 ;  The WOZ Monitor for the Apple 1
 ;  Written by Steve Wozniak in 1976
-; 
-; ; Page 0 Variables
+
 section "wozmon variables", hram
-; XAML            = $24           ;  Last "opened" location Low
-xaml: 				ds 1
-; XAMH            = $25           ;  Last "opened" location High
-xamh: 				ds 1
-; STL             = $26           ;  Store address Low
-stl: 				ds 1
-; STH             = $27           ;  Store address High
-sth: 				ds 1
-; L               = $28           ;  Hex value parsing Low
-lo: 				ds 1
-; H               = $29           ;  Hex value parsing High
-hi: 				ds 1
-; YSAV            = $2A           ;  Used to see if hex value is given
-ysav: 				ds 1
-; MODE            = $2B           ;  $00=XAM, $7F=STOR, $AE=BLOCK XAM
-mode: 				ds 1
-; X
+xaml: 				ds 1			; Last "opened" location Low
+xamh: 				ds 1			; Last "opened" location High
+stl: 				ds 1			; Store address Low
+sth: 				ds 1			; Store address High
+lo: 				ds 1			; Hex value parsing Low
+hi: 				ds 1			; Hex value parsing High
+ysav: 				ds 1			; Used to see if hex value is given
+mode: 				ds 1			; $00=XAM, $74=STOR, $B8=BLOCK XAM
 x: 					ds 1
-; Y
 y: 					ds 1
-; 
-; ; Other Variables
+
 section "wozmon other variables", wramx, align[8]
-; IN              = $0200         ;  Input buffer to $027F
-in: 				ds $100
-; KBD             = $D010         ;  PIA.A keyboard input
-; KBDCR           = $D011         ;  PIA.A keyboard control register
-; DSP             = $D012         ;  PIA.B display output register
-; DSPCR           = $D013         ;  PIA.B display control register
-; 
-;                .org $FF00
+in: 				ds $100			;  Input buffer
+
 section "wozmon code", romx
-;                .export RESET
 export reset
-; 
-; RESET:          
 reset:
-					ld a, $1b
-;                 CLD             ; Clear decimal arithmetic mode.
-;                 CLI
-;                 LDY #$7F        ; Mask for DSP data direction register.
-;                 STY DSP         ; Set it up.
-;                 LDA #$A7        ; KBD and DSP control register mask.
-;                 STA KBDCR       ; Enable interrupts, set CA1, CB1, for
-;                 STA DSPCR       ;  positive edge sense/output mode.
-; NOTCR:          
+	ld a, $1b
 notcr:
-;                 CMP #'_'+$80    ; "_"?
-					cp $08
-;                 BEQ BACKSPACE   ; Yes.
-					jr z, backspace
-;                 CMP #$9B        ; ESC?
-					cp $1b
-;                 BEQ ESCAPE      ; Yes.
-					jr z, escape
-;                 INY             ; Advance text index.
-					ld hl, y
-					inc [hl]
-;                 BPL NEXTCHAR    ; Auto ESC if > 127.
-					jr nz, nextchar 	; jump if < 256
-; ESCAPE:         
+		cp $08				; "\b"?
+		jr z, backspace	; Yes.
+		cp $1b				; ESC?
+		jr z, escape		; Yes.
+		ld hl, y
+		inc [hl]			; Advance text index.
+		jr nz, nextchar 	; Auto ESC if > 255.
 escape:
-;                 LDA #'\'+$80    ; "\".
-					ld a, "\\"
-;                 JSR ECHO        ; Output it.
-					call echo
-; GETLINE:        
+		ld a, "\\"			; "\".
+		call echo			; Output it.
 getline:
-;                 LDA #$8D        ; CR.
-					ld a, "\n"
-;                 JSR ECHO        ; Output it.
-					call echo
-;                 LDY #$01        ; Initialize text index.
-					ld a, $01
-					ldh [y], a
-; BACKSPACE:      
+		ld a, "\n"			; CR.
+		call echo			; Output it.
+		ld a, $01			; Initialize text index.
+		ldh [y], a
 backspace:
-;                 DEY             ; Back up text index.
-					ld hl, y
-					dec [hl]
-					ld a, [hl]
-					cp $ff
-;                 BMI GETLINE     ; Beyond start of line, reinitialize.
-					jr z, getline
-; NEXTCHAR:       
+		ld hl, y		
+		dec [hl]			; Back up text index.
+		ld a, [hl]
+		cp $ff
+		jr z, getline 		; Beyond start of line, reinitialize.
 nextchar:
-					call chrin
-;                 LDA KBDCR       ; Key ready?
-;                 BPL NEXTCHAR    ; Loop until ready.
-;                 LDA KBD         ; Load character. B7 should be ‘1’.
-;                 STA IN,Y        ; Add to text buffer.
-					ld hl, y
-					ld l, [hl]
-					ld h, high(in)
-					ld [hl], a
-;                 JSR ECHO        ; Display character.
-					call echo
-;                 CMP #$8D        ; CR?
-					cp "\n"
-;                 BNE NOTCR       ; No.
-					jr nz, notcr
-;                 LDY #$FF        ; Reset text index.
-					ld a, $ff
-					ldh [y], a
-;                 LDA #$00        ; For XAM mode.
-					ld a, $00
-;                 TAX             ; 0->X.
-					ldh [x], a
+		call chrin			; Load character.
+		ld hl, y
+		ld l, [hl]
+		ld h, high(in)
+		ld [hl], a 			; Add to text buffer.
+		call echo 			; Display character.
+		cp "\n"				; LF?
+		jr nz, notcr 		; No.
+		ld a, $ff 			; Reset text index.
+		ldh [y], a
+		ld a, $00 			; For XAM mode.
+		ldh [x], a 			; 0->X.
 setblock:
-					sla a
-; SETSTOR:        
+		sla a
 setstor:
-;                 ASL             ; Leaves $7B if setting STOR mode.
-					sla a
-; SETMODE:        
-;                 STA MODE        ; $00=XAM, $7B=STOR, $AE=BLOCK XAM.
-					ldh [mode], a 	; $00 = XAM, $74 = STOR, $B8 = BLOK XAM.
-; BLSKIP:         
+		sla a				; TODO: check -> Leaves $7B if setting STOR mode.
+		ldh [mode], a 		; $00 = XAM, $74 = STOR, $B8 = BLOK XAM.
 blskip:
-;                 INY             ; Advance text index.
-					ld hl, y
-					inc [hl]
-; NEXTITEM:       
+		ld hl, y
+		inc [hl] 			; Advance text index.
 nextitem:
-;                 LDA IN,Y        ; Get character.
-					ld hl, y
-					ld l, [hl]
-					ld h, high(in)
-					ld a, [hl]
-;                 CMP #$8D        ; CR?
-					cp "\n"
-;                 BEQ GETLINE     ; Yes, done this line.
-					jr z, getline
-;                 CMP #'.'+$80    ; "."?
-					cp "."
-;                 BCC BLSKIP      ; Skip delimiter.
-					jr c, blskip
-;                 BEQ SETMODE     ; Set BLOCK XAM mode.
-					jr z, setblock
-;                 CMP #':'+$80    ; ":"?
-					cp ":"
-;                 BEQ SETSTOR     ; Yes. Set STOR mode.
-					jr z, setstor
-;                 CMP #'R'+$80    ; "R"?
-					cp "R"
-;                 BEQ RUN         ; Yes. Run user program.
-					jr z, run
-;                 STX L           ; $00->L.
-					ldh a, [x]
-					ldh [lo], a
-;                 STX H           ;  and H.
-					ldh [hi], a
-;                 STY YSAV        ; Save Y for comparison.
-					ldh a, [y]
-					ldh [ysav], a
-; NEXTHEX:        
+		ld hl, y
+		ld l, [hl]
+		ld h, high(in)
+		ld a, [hl] 			; Get character.
+		cp "\n" 			; LF?
+		jr z, getline 		; Yes, done this line.
+		cp "." 				; "."?
+		jr c, blskip 		; Skip delimiter.
+		jr z, setblock 		; Set BLOCK XAM mode.
+		cp ":" 				; ":"?
+		jr z, setstor 		; Yes. Set STOR mode.
+		cp "R" 				; "R"?
+		jr z, run 			; Yes. Run user program.
+		ldh a, [x]
+		ldh [lo], a 		; $00->L. 
+		ldh [hi], a 		;  and H.
+		ldh a, [y]
+		ldh [ysav], a 		; Save Y for comparison.
 nexthex:
-;                 LDA IN,Y        ; Get character for hex test.
-					ldh a, [y]
-					ld l, a
-					ld h, high(in)
-					ld a, [hl]
-;                 EOR #$B0        ; Map digits to $0-9.
-					xor "0"
-;                 CMP #$0A        ; Digit?
-					cp 10
-;                 BCC DIG         ; Yes.
-					jr c, dig
-;                 ADC #$88        ; Map letter "A"-"F" to $FA-FF.
-					add $89
-;                 CMP #$FA        ; Hex letter?
-					cp $fa
-;                 BCC NOTHEX      ; No, character not hex.
-					jr c, nothex
-; DIG:            
+		ld hl, y
+		ld l, [hl]
+		ld h, high(in)
+		ld a, [hl] 			; Get character for hex test.
+		xor "0" 			; Map digits to $0-9.
+		cp 10 				; Digit?
+		jr c, dig 			; Yes.
+		add $89 			; Map letter "A"-"F" to $FA-FF.
+		cp $fa 				; Hex letter?
+		jr c, nothex 		; No, character not hex.
 dig:
-;                 ASL
-					sla a
-;                 ASL             ; Hex digit to MSD of A.
-					sla a
-;                 ASL
-					sla a
-;                 ASL
-					sla a
-;                 LDX #$04        ; Shift count.
-					ld hl, x
-					ld [hl], 4
-; HEXSHIFT:       
+		sla a
+		sla a 				; Hex digit to MSD of A.
+		sla a
+		sla a   
+		ld hl, x
+		ld [hl], 4 			; Shift count.
 hexshift:
-;                 ASL             ; Hex digit left, MSB to carry.
-					sla a
-;                 ROL L           ; Rotate into LSD.
-					ld hl, lo
-					rl [hl]
-;                 ROL H           ; Rotate into MSD’s.
-					ld hl, hi
-					rl [hl]
-;                 DEX             ; Done 4 shifts?
-					ld hl, x
-					dec [hl]
-;                 BNE HEXSHIFT    ; No, loop.
-					jr nz, hexshift
-;                 INY             ; Advance text index.
-					ld hl, y
-					inc [hl]
-;                 BNE NEXTHEX     ; Always taken. Check next character for hex.
-					jr nexthex
-; NOTHEX:         
+		sla a 				; Hex digit left, MSB to carry.
+		ld hl, lo
+		rl [hl] 			; Rotate into LSD.
+		ld hl, hi
+		rl [hl] 			; Rotate into MSD’s.
+		ld hl, x
+		dec [hl] 			; Done 4 shifts?
+		jr nz, hexshift 	; No, loop.
+		ld hl, y
+		inc [hl] 			; Advance text index.
+		jr nexthex 			; Check next character for hex.
 nothex:
-;                 CPY YSAV        ; Check if L, H empty (no hex digits).
-					ldh a, [ysav]
-					ld hl, y
-					cp [hl]
-;                 BEQ ESCAPE      ; Yes, generate ESC sequence.
-					jp z, escape
-;                 BIT MODE        ; Test MODE byte.
-					ld hl, mode
-					bit 6, [hl]
-;                 BVC NOTSTOR     ; B6=0 STOR, 1 for XAM and BLOCK XAM
-					jr z, notstor 	; B6=1 STOR, 0 for XAM and BLOCK XAM
-;                 LDA L           ; LSD’s of hex data.
-;                 STA (STL,X)     ; Store at current ‘store index’.
-					ldh a, [sth]
-					ld h, a
-					ldh a, [stl]
-					ld l, a
-					ldh a, [x]
-					add l
-					ld l, a
-					ldh a, [lo]		; LDA L
-					ld [hl], a
-;                 INC STL         ; Increment store index.
-					ld hl, stl
-					inc [hl]
-;                 BNE NEXTITEM    ; Get next item. (no carry).
-					jr nz, nextitem
-;                 INC STH         ; Add carry to ‘store index’ high order.
-					ld hl, sth
-					inc [hl]
-; TONEXTITEM:     
+		ldh a, [ysav]
+		ld hl, y
+		cp [hl] 			; Check if L, H empty (no hex digits).
+		jp z, escape 		; Yes, generate ESC sequence.
+		ld hl, mode
+		bit 6, [hl] 		; Test MODE byte.
+		jr z, notstor 		; B6=1 STOR, 0 for XAM and BLOCK XAM
+		ldh a, [sth]
+		ld h, a
+		ldh a, [stl]
+		ld l, a
+		ldh a, [x]
+		add l
+		ld l, a
+		ldh a, [lo] 		; LSD’s of hex data.
+		ld [hl], a 			; Store at current ‘store index’.
+		ld hl, stl
+		inc [hl] 			; Increment store index.
+		jp nz, nextitem 	; Get next item. (no carry).
+		ld hl, sth
+		inc [hl] 			; Add carry to ‘store index’ high order.
 tonextitem:
-;                 JMP NEXTITEM    ; Get next command item.
-					jp nextitem
-; RUN:            
+		jp nextitem 		; Get next command item.
 run:
-;                 JMP (XAML)      ; Run at current XAM index.
-					ldh a, [xaml]
-					ld l, a
-					ldh a, [xamh]
-					ld h, a
-					jp hl
-; NOTSTOR:        
+		ldh a, [xaml]
+		ld l, a
+		ldh a, [xamh]
+		ld h, a
+		jp hl 				; Run at current XAM index.
 notstor:
-;                 BMI XAMNEXT     ; B7=0 for XAM, 1 for BLOCK XAM.
-					bit 7, [hl]
-					jr nz, xamnext
-;                 LDX #$02        ; Byte count.
-					ld a, $02
-					ldh [x], a
-; SETADR:         
+		ld hl, mode
+		bit 7, [hl]
+		jr nz, xamnext 		; B7=0 for XAM, 1 for BLOCK XAM.
+		ld a, $02 			; Byte count.
+		ldh [x], a
 setadr:
-;                 LDA L-1,X       ; Copy hex data to
-					ld hl, lo-1
-					ldh a, [x]
-					add l
-					ld l, a
-					ld a, [hl]
-;                 STA STL-1,X     ;  ‘store index’.
-					push af
-					ld hl, stl-1
-					ldh a, [x]
-					add l
-					ld l, a
-					pop af
-					ld [hl], a
-;                 STA XAML-1,X    ; And to ‘XAM index’.
-					push af
-					ld hl, xaml-1
-					ldh a, [x]
-					add l
-					ld l, a
-					pop af
-					ld [hl], a
-;                 DEX             ; Next of 2 bytes.
-					ld hl, x
-					dec [hl]
-;                 BNE SETADR      ; Loop unless X=0.
-					jr nz, setadr
-; NXTPRNT:        
+		ld hl, lo-1
+		ldh a, [x]
+		add l
+		ld l, a
+		ld a, [hl] 			; Copy hex data to
+		push af
+		ld hl, stl-1
+		ldh a, [x]
+		add l
+		ld l, a
+		pop af
+		ld [hl], a 			;  ‘store index’.
+		push af
+		ld hl, xaml-1
+		ldh a, [x]
+		add l
+		ld l, a
+		pop af
+		ld [hl], a 			; And to ‘XAM index’.
+		ld hl, x
+		dec [hl] 			; Next of 2 bytes.
+		jr nz, setadr 		; Loop unless X=0.
 nxtprnt:
-;                 BNE PRDATA      ; NE means no address to print.
-					jr nz, prdata
-;                 LDA #$8D        ; CR.
-					ld a, "\n"
-;                 JSR ECHO        ; Output it.
-					call echo
-;                 LDA XAMH        ; ‘Examine index’ high-order byte.
-					ldh a, [xamh]
-;                 JSR PRBYTE      ; Output it in hex format.
-					call prbyte
-;                 LDA XAML        ; Low-order ‘examine index’ byte.
-					ldh a, [xaml]
-;                 JSR PRBYTE      ; Output it in hex format.
-					call prbyte
-;                 LDA #':'+$80    ; ":".
-					ld a, ":"
-;                 JSR ECHO        ; Output it.
-					call echo
-; PRDATA:         
+		jr nz, prdata 		; NE means no address to print.
+		ld a, "\n" 			; LF.
+		call echo 			; Output it.
+		ldh a, [xamh] 		; ‘Examine index’ high-order byte.
+		call prbyte 		; Output it in hex format.
+		ldh a, [xaml] 		; Low-order ‘examine index’ byte.
+		call prbyte 		; Output it in hex format.
+		ld a, ":" 			; ":".
+		call echo 			; Output it.
 prdata:
-;                 LDA #$A0        ; Blank.
-					ld a, " "
-;                 JSR ECHO        ; Output it.
-					call echo
-;                 LDA (XAML,X)    ; Get data byte at ‘examine index’.
-					ldh a, [xamh]
-					ld h, a
-					ldh a, [xaml]
-					ld l, a
-					ldh a, [x]
-					add l
-					ld l, a
-					ld a, [hl]
-;                 JSR PRBYTE      ; Output it in hex format.
-					call prbyte
-; XAMNEXT:        
+		ld a, " " 			; Blank.  
+		call echo 			; Output it.
+		ldh a, [xamh]
+		ld h, a
+		ldh a, [xaml]
+		ld l, a
+		ldh a, [x]
+		add l
+		ld l, a
+		ld a, [hl] 			; Get data byte at ‘examine index’.
+		call prbyte 		; Output it in hex format.
 xamnext:
-;                 STX MODE        ; 0->MODE (XAM mode).
-					ldh a, [x]
-					ldh [mode], a
-;                 LDA XAML
-					ldh a, [xaml]
-;                 CMP L           ; Compare ‘examine index’ to hex data.
-					ld hl, lo
-					cp [hl]
-;                 LDA XAMH
-					ldh a, [xamh]
-;                 SBC H
-					ld hl, hi
-					sbc [hl]
-;                 BCS TONEXTITEM  ; Not less, so no more data to output.
-					jr nc, tonextitem
-;                 INC XAML
-					ld hl, xaml
-					inc [hl]
-;                 BNE MOD8CHK     ; Increment ‘examine index’.
-					jr nz, mod8chk
-;                 INC XAMH
-					ld hl, xamh
-					inc [hl]
-; MOD8CHK:        
+		ldh a, [x]
+		ldh [mode], a 		; 0->MODE (XAM mode).
+		ldh a, [xaml]
+		ld hl, lo
+		cp [hl] 			; Compare ‘examine index’ to hex data.
+		ldh a, [xamh]
+		ld hl, hi
+		sbc [hl]
+		jr nc, tonextitem 	; Not less, so no more data to output.
+		ld hl, xaml
+		inc [hl]
+		jr nz, mod8chk 		; Increment ‘examine index’.
+		ld hl, xamh
+		inc [hl]
 mod8chk:
-;                 LDA XAML        ; Check low-order ‘examine index’ byte
-					ldh a, [xaml]
-;                 AND #$07        ;  For MOD 8=0
-					and $07
-;                 BPL NXTPRNT     ; Always taken.
-					jr nxtprnt
-; PRBYTE:         
+		ldh a, [xaml] 		; Check low-order ‘examine index’ byte
+		and $07 			;  For MOD 8=0 
+		jr nxtprnt
 prbyte:
-;                 PHA             ; Save A for LSD.
-					push af
-;                 LSR
-					srl a
-;                 LSR
-					srl a
-;                 LSR             ; MSD to LSD position.
-					srl a
-;                 LSR
-					srl a
-;                 JSR PRHEX       ; Output hex digit.
-					call prhex
-;                 PLA             ; Restore A.
-					pop af
-; PRHEX:          
+		push af 			; Save A for LSD.
+		srl a
+		srl a  
+		srl a 				; MSD to LSD position.
+		srl a
+		call prhex 			; Output hex digit.
+		pop af 				; Restore A.
 prhex:
-;                 AND #$0F        ; Mask LSD for hex print.
-					and $0f
-;                 ORA #'0'+$80    ; Add "0".
-					or "0"
-;                 CMP #$BA        ; Digit?
-					cp "0"+10
-;                 BCC ECHO        ; Yes, output it.
-					jr c, echo
-;                 ADC #$06        ; Add offset for letter.
-					add $07
-; ECHO:           
+		and $0f 			; Mask LSD for hex print.
+		or "0" 				; Add "0".
+		cp "0"+10 			; Digit?
+		jr c, echo 			; Yes, output it.
+		add $07 			; Add offset for letter.
 echo:
-					jp chrout
-;                 BIT DSP         ; DA bit (B7) cleared yet?
-;                 BMI ECHO        ; No, wait for display.
-;                 STA DSP         ; Output character. Sets DA.
-;                 RTS             ; Return.
-; 
-;                 BRK             ; unused
-;                 BRK             ; unused
-; 
-; ; Interrupt Vectors
-; 
-;                 .WORD $0F00     ; NMI
-;                 .WORD RESET     ; RESET
-;                 .WORD $0000     ; BRK/IRQ
+		jp chrout 			; Output character.
