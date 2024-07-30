@@ -6,12 +6,12 @@ export wozmon
 section "wozmon variables", hram
 ; note: not sure why there are seperate variables for XAM and ST,
 ;       seems to be working fine when they are one and the same.
-; register e is now what used to be XAML 	; Last "opened" location Low
-; register d is now what used to be XAMH 	; Last "opened" location High
-; register e is now what used to be STL 	; Store address Low
-; register d is now what used to be STH 	; Store address High
-; register l is now what used to be L 		; Hex value parsing Low
-; register h is now what used to be H 		; Hex value parsing High
+; register l is now what used to be XAML 	; Last "opened" location Low
+; register h is now what used to be XAMH 	; Last "opened" location High
+; register l is now what used to be STL 	; Store address Low
+; register h is now what used to be STH 	; Store address High
+; register e is now what used to be L 		; Hex value parsing Low
+; register d is now what used to be H 		; Hex value parsing High
 bsav: 				ds 1			; Used to see if hex value is given
 mode: 				ds 1			; $00=XAM, $74=STOR, $B8=BLOCK XAM
 ; register b is now what used to be the X register
@@ -67,7 +67,7 @@ wozmon:
 		jr z, .setstor 		; Yes. Set STOR mode.
 		cp "R" 				; "R"?
 		jr z, .run 			; Yes. Run user program.
-		ld hl, 0 			; ; $00->L and H.
+		ld de, 0 			; ; $00->L and H.
 		ld a, c
 		ldh [bsav], a 		; Save c for comparison.
 	.nexthex
@@ -87,8 +87,8 @@ wozmon:
 		ld b, 4 			; Shift count.
 	.hexshift
 		add a 				; Hex digit left, MSB to carry.
-		rl l 				; Rotate into LSD.
-		rl h 				; Rotate into MSD’s.
+		rl e 				; Rotate into LSD.
+		rl d 				; Rotate into MSD’s.
 		dec b 				; Done 4 shifts?
 		jr nz, .hexshift 	; No, loop.
 		dec c 				; Advance text index.
@@ -100,52 +100,50 @@ wozmon:
 		ldh a, [mode]
 		bit 6, a 			; Test MODE byte.
 		jr z, .notstor 		; B6=1 STOR, 0 for XAM and BLOCK XAM
-		ld a, l 			; LSD’s of hex data.
-		ld [de], a 			; Store at current ‘store index’.
-		inc de 				; Increment store index.
+		ld a, e 			; LSD’s of hex data.
+		ld [hl], a 			; Store at current ‘store index’.
+		inc hl 				; Increment store index.
 	.tonextitem
 		jr .nextitem 		; Get next command item.
 	.run
-		ld l, e
-		ld h, d
 		jp hl 				; Run at current XAM index.
 	.notstor
 		bit 7, a
 		jr nz, .xamnext 	; B7=0 for XAM, 1 for BLOCK XAM.
-		ld e, l
-		ld d, h
+		ld l, e
+		ld h, d
 	.nxtprnt
 		jr nz, .prdata 		; NE means no address to print.
 		ld a, "\n" 			; LF.
 		call chrout 		; Output it.
-		ld a, d 			; ‘Examine index’ high-order byte.
+		ld a, h 			; ‘Examine index’ high-order byte.
 		call .prbyte 		; Output it in hex format.
-		ld a, e 			; Low-order ‘examine index’ byte.
+		ld a, l 			; Low-order ‘examine index’ byte.
 		call .prbyte 		; Output it in hex format.
 		ld a, ":" 			; ":".
 		call chrout 		; Output it.
 	.prdata
 		ld a, " " 			; Blank.
 		call chrout 		; Output it.
-		ld a, [de] 			; Get data byte at ‘examine index’.
+		ld a, [hl] 			; Get data byte at ‘examine index’.
 		call .prbyte 		; Output it in hex format.
 	.xamnext
 		xor a
 		ldh [mode], a 		; 0->MODE (XAM mode).
-		ld a, e
-		cp l 				; Compare ‘examine index’ to hex data.
-		ld a, d
-		sbc h
+		ld a, l
+		cp e 				; Compare ‘examine index’ to hex data.
+		ld a, h
+		sbc d
 		jr nc, .tonextitem 	; Not less, so no more data to output.
-		inc de
-		ld a, e 			; Check low-order ‘examine index’ byte
+		inc hl
+		ld a, l 			; Check low-order ‘examine index’ byte
 		and $03 			;  For MOD 4=0
 		jr .nxtprnt
 	.prbyte
-		ld l, a 			; Save A for LSD.
+		push af 			; Save A for LSD.
 		swap a 				; MSD to LSD position.
 		call .prhex 		; Output hex digit.
-		ld a, l 			; Restore A.
+		pop af 				; Restore A.
 	.prhex
 		and $0f 			; Mask LSD for hex print.
 		or "0" 				; Add "0".
