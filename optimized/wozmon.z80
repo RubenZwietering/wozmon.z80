@@ -4,8 +4,8 @@
 export wozmon
 
 section "wozmon variables", hram
-xaml: 				ds 1			; Last "opened" location Low
-xamh: 				ds 1			; Last "opened" location High
+; register e is now what used to be XAML 	; Last "opened" location Low
+; register d is now what used to be XAMH 	; Last "opened" location High
 stl: 				ds 1			; Store address Low
 sth: 				ds 1			; Store address High
 lo: 				ds 1			; Hex value parsing Low
@@ -123,37 +123,34 @@ wozmon:
 	.tonextitem
 		jr .nextitem 		; Get next command item.
 	.run
-		ldh a, [xaml]
-		ld l, a
-		ldh a, [xamh]
-		ld h, a
+		ld l, e
+		ld h, d
 		jp hl 				; Run at current XAM index.
 	.notstor
 		bit 7, a
 		jr nz, .xamnext 	; B7=0 for XAM, 1 for BLOCK XAM.
 		ldh a, [lo]
 		ldh [stl], a
-		ldh [xaml], a
+		ld e, a
 		ldh a, [hi]
 		ldh [sth], a
-		ldh [xamh], a
+		ld d, a
 		ld c, 0				; TODO: necessary?
 	.nxtprnt
 		jr nz, .prdata 		; NE means no address to print.
 		ld a, "\n" 			; LF.
 		call chrout 		; Output it.
-		ldh a, [xamh] 		; ‘Examine index’ high-order byte.
+		ld a, d 			; ‘Examine index’ high-order byte.
 		call .prbyte 		; Output it in hex format.
-		ldh a, [xaml] 		; Low-order ‘examine index’ byte.
+		ld a, e 			; Low-order ‘examine index’ byte.
 		call .prbyte 		; Output it in hex format.
 		ld a, ":" 			; ":".
 		call chrout 		; Output it.
 	.prdata
 		ld a, " " 			; Blank.
 		call chrout 		; Output it.
-		ldh a, [xamh]
-		ld h, a
-		ldh a, [xaml]
+		ld h, d
+		ld a, e
 		add c
 		ld l, a
 		ld a, [hl] 			; Get data byte at ‘examine index’.
@@ -161,20 +158,15 @@ wozmon:
 	.xamnext
 		ld a, c
 		ldh [mode], a 		; 0->MODE (XAM mode).
-		ldh a, [xaml]
+		ld a, e
 		ld hl, lo
 		cp [hl] 			; Compare ‘examine index’ to hex data.
-		ldh a, [xamh]
+		ld a, d
 		ld hl, hi
 		sbc [hl]
 		jr nc, .tonextitem 	; Not less, so no more data to output.
-		ld hl, xaml
-		inc [hl]
-		jr nz, .mod8chk 	; Increment ‘examine index’.
-		ld hl, xamh
-		inc [hl]
-	.mod8chk
-		ldh a, [xaml] 		; Check low-order ‘examine index’ byte
+		inc de
+		ld a, e 			; Check low-order ‘examine index’ byte
 		and $03 			;  For MOD 4=0
 		jr .nxtprnt
 	.prbyte
