@@ -41,9 +41,8 @@ wozmon:
 		jr z, .getline 		; Beyond start of line, reinitialize.
 	.nextchar
 		call chrin			; Load character.
-		ld l, c
-		ld h, high(in)
-		ld [hl], a 			; Add to text buffer.
+		ld b, high(in)
+		ld [bc], a 			; Add to text buffer.
 		call chrout 		; Display character.
 		cp "\n"				; LF?
 		jr nz, .notcr 		; No.
@@ -57,9 +56,8 @@ wozmon:
 	.blskip
 		dec c 				; Advance text index.
 	.nextitem
-		ld l, c
-		ld h, high(in)
-		ld a, [hl] 			; Get character.
+		ld b, high(in)
+		ld a, [bc] 			; Get character.
 		cp "\n" 			; LF?
 		jr z, .getline 		; Yes, done this line.
 		cp "." 				; "."?
@@ -75,9 +73,8 @@ wozmon:
 		ld a, c
 		ldh [bsav], a 		; Save c for comparison.
 	.nexthex
-		ld l, c
-		ld h, high(in)
-		ld a, [hl] 			; Get character for hex test.
+		ld b, high(in)
+		ld a, [bc] 			; Get character for hex test.
 		xor "0" 			; Map digits to $0-9.
 		cp 10 				; Digit?
 		jr c, .dig 			; Yes.
