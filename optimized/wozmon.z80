@@ -29,6 +29,7 @@ section "wozmon code", romx
 		dec c				; Advance text index.
 		jr nz, wozmon.nextchar 	; Auto ESC if > 255.
 wozmon:
+		ld b, high(in)
 	.escape
 		ld a, "\\"			; "\".
 		call chrout			; Output it.
@@ -41,7 +42,6 @@ wozmon:
 		jr z, .getline 		; Beyond start of line, reinitialize.
 	.nextchar
 		call chrin			; Load character.
-		ld b, high(in)
 		ld [bc], a 			; Add to text buffer.
 		call chrout 		; Display character.
 		cp "\n"				; LF?
@@ -56,7 +56,6 @@ wozmon:
 	.blskip
 		dec c 				; Advance text index.
 	.nextitem
-		ld b, high(in)
 		ld a, [bc] 			; Get character.
 		cp "\n" 			; LF?
 		jr z, .getline 		; Yes, done this line.
@@ -71,7 +70,6 @@ wozmon:
 		ld a, c
 		ldh [bsav], a 		; Save c for comparison.
 	.nexthex
-		ld b, high(in)
 		ld a, [bc] 			; Get character for hex test.
 		xor "0" 			; Map digits to $0-9.
 		cp 10 				; Digit?
@@ -84,6 +82,7 @@ wozmon:
 		add a 				; Hex digit to MSD of A.
 		add a
 		add a
+		push bc
 		ld b, 4 			; Shift count.
 	.hexshift
 		add a 				; Hex digit left, MSB to carry.
@@ -91,6 +90,7 @@ wozmon:
 		rl d 				; Rotate into MSD’s.
 		dec b 				; Done 4 shifts?
 		jr nz, .hexshift 	; No, loop.
+		pop bc
 		dec c 				; Advance text index.
 		jr .nexthex 		; Check next character for hex.
 	.nothex
