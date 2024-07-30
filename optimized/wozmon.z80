@@ -30,10 +30,10 @@ reset:
 		jr nz, .nextchar 	; Auto ESC if > 255.
 	.escape
 		ld a, "\\"			; "\".
-		call .echo			; Output it.
+		call chrout			; Output it.
 	.getline
 		ld a, "\n"			; CR.
-		call .echo			; Output it.
+		call chrout			; Output it.
 		ld a, $01			; Initialize text index.
 		ldh [y], a
 	.backspace
@@ -43,12 +43,12 @@ reset:
 		cp $ff
 		jr z, .getline 		; Beyond start of line, reinitialize.
 	.nextchar
-		call chrin2			; Load character.
+		call chrin			; Load character.
 		ld hl, y
 		ld l, [hl]
 		ld h, high(in)
 		ld [hl], a 			; Add to text buffer.
-		call .echo 			; Display character.
+		call chrout 		; Display character.
 		cp "\n"				; LF?
 		jr nz, .notcr 		; No.
 		ld a, $ff 			; Reset text index.
@@ -173,16 +173,16 @@ reset:
 	.nxtprnt
 		jr nz, .prdata 		; NE means no address to print.
 		ld a, "\n" 			; LF.
-		call .echo 			; Output it.
+		call chrout 		; Output it.
 		ldh a, [xamh] 		; ‘Examine index’ high-order byte.
 		call .prbyte 		; Output it in hex format.
 		ldh a, [xaml] 		; Low-order ‘examine index’ byte.
 		call .prbyte 		; Output it in hex format.
 		ld a, ":" 			; ":".
-		call .echo 			; Output it.
+		call chrout 		; Output it.
 	.prdata
 		ld a, " " 			; Blank.
-		call .echo 			; Output it.
+		call chrout 		; Output it.
 		ldh a, [xamh]
 		ld h, a
 		ldh a, [xaml]
@@ -220,7 +220,6 @@ reset:
 		and $0f 			; Mask LSD for hex print.
 		or "0" 				; Add "0".
 		cp "0"+10 			; Digit?
-		jr c, .echo 		; Yes, output it.
+		jp c, chrout 		; Yes, output it.
 		add $07 			; Add offset for letter.
-	.echo
-		jp chrout2 			; Output character.
+		jp chrout 			; Output character.
