@@ -14,8 +14,8 @@ lo: 				ds 1			; Hex value parsing Low
 hi: 				ds 1			; Hex value parsing High
 bsav: 				ds 1			; Used to see if hex value is given
 mode: 				ds 1			; $00=XAM, $74=STOR, $B8=BLOCK XAM
-; register c is now what used to be the X register
-; register b is now what used to be the Y register
+; register b is now what used to be the X register
+; register c is now what used to be the Y register
 
 section "wozmon other variables", wramx, align[8, 1]
 in: 				ds $ff			;  Input buffer
@@ -26,7 +26,7 @@ section "wozmon code", romx
 		jr z, wozmon.backspace	; Yes.
 		cp $1b				; ESC?
 		jr z, wozmon.escape		; Yes.
-		dec b				; Advance text index.
+		dec c				; Advance text index.
 		jr nz, wozmon.nextchar 	; Auto ESC if > 255.
 wozmon:
 	.escape
@@ -35,29 +35,29 @@ wozmon:
 	.getline
 		ld a, "\n"			; CR.
 		call chrout			; Output it.
-		ld b, $fe			; Initialize text index.
+		ld c, $fe			; Initialize text index.
 	.backspace
-		inc b				; Back up text index.
+		inc c				; Back up text index.
 		jr z, .getline 		; Beyond start of line, reinitialize.
 	.nextchar
 		call chrin			; Load character.
-		ld l, b
+		ld l, c
 		ld h, high(in)
 		ld [hl], a 			; Add to text buffer.
 		call chrout 		; Display character.
 		cp "\n"				; LF?
 		jr nz, .notcr 		; No.
 		xor a 				; For XAM mode.
-		ld b, a 			; Reset text index.
+		ld c, a 			; Reset text index.
 	.setblock
 		add a
 	.setstor
 		add a				; TODO: check -> Leaves $7B if setting STOR mode.
 		ldh [mode], a 		; $00 = XAM, $74 = STOR, $B8 = BLOK XAM.
 	.blskip
-		dec b 				; Advance text index.
+		dec c 				; Advance text index.
 	.nextitem
-		ld l, b
+		ld l, c
 		ld h, high(in)
 		ld a, [hl] 			; Get character.
 		cp "\n" 			; LF?
@@ -72,10 +72,10 @@ wozmon:
 		xor a
 		ldh [lo], a 		; $00->L.
 		ldh [hi], a 		;  and H.
-		ld a, b
-		ldh [bsav], a 		; Save b for comparison.
+		ld a, c
+		ldh [bsav], a 		; Save c for comparison.
 	.nexthex
-		ld l, b
+		ld l, c
 		ld h, high(in)
 		ld a, [hl] 			; Get character for hex test.
 		xor "0" 			; Map digits to $0-9.
@@ -89,20 +89,20 @@ wozmon:
 		add a 				; Hex digit to MSD of A.
 		add a
 		add a
-		ld c, 4 			; Shift count.
+		ld b, 4 			; Shift count.
 	.hexshift
 		add a 				; Hex digit left, MSB to carry.
 		ld hl, lo
 		rl [hl] 			; Rotate into LSD.
 		ld hl, hi
 		rl [hl] 			; Rotate into MSD’s.
-		dec c 				; Done 4 shifts?
+		dec b 				; Done 4 shifts?
 		jr nz, .hexshift 	; No, loop.
-		dec b 				; Advance text index.
+		dec c 				; Advance text index.
 		jr .nexthex 		; Check next character for hex.
 	.nothex
 		ldh a, [bsav]
-		cp b 				; Check if L, H empty (no hex digits).
+		cp c 				; Check if L, H empty (no hex digits).
 		jr z, .escape 		; Yes, generate ESC sequence.
 		ldh a, [mode]
 		bit 6, a 			; Test MODE byte.
