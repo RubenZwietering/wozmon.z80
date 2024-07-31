@@ -8,7 +8,18 @@
 
 export wozmon
 
+static_assert fatal, !(def(WOZMON_HRAM_ONLY) && def(WOZMON_WRAM_ONLY)), \
+	"WOZMON_HRAM_ONLY and WOZMON_WRAM_ONLY cannot both be defined"
+
+if def(WOZMON_WRAM_ONLY)
+
+section "wozmon variables", wramx
+
+else
+
 section "wozmon variables", hram
+
+endc
 ; note: not sure why there are seperate variables for XAM and ST,
 ;       seems to be working fine when they are one and the same.
 ; register ’l’ is now what used to be XAML 		; Last "opened" location Low
@@ -100,7 +111,11 @@ wozmon:
 		add a 				; Leaves $B8 if setting BLOK XAM mode.
 	.setstor
 		add a				; Leaves $74 if setting STOR mode.
+	if def(WOZMON_WRAM_ONLY)
+		ld [mode], a 		; $00 = XAM, $74 = STOR, $B8 = BLOK XAM.
+	else
 		ldh [mode], a 		; $00 = XAM, $74 = STOR, $B8 = BLOK XAM.
+	endc
 	.blskip
 	if def(WOZMON_HRAM_ONLY)
 		inc c 				; Advance text index.
@@ -124,7 +139,11 @@ wozmon:
 		jr z, .run 			; Yes. Run user program.
 		ld de, 0 			; $00->Hex value parsing.
 		ld a, c
+	if def(WOZMON_WRAM_ONLY)
+		ld [csav], a 		; Save ’c’ for comparison.
+	else
 		ldh [csav], a 		; Save ’c’ for comparison.
+	endc
 	.nexthex
 	if def(WOZMON_HRAM_ONLY)
 		ldh a, [c] 			; Get character.
@@ -160,10 +179,18 @@ wozmon:
 	endc
 		jr .nexthex 		; Check next character for hex.
 	.nothex
+	if def(WOZMON_WRAM_ONLY)
+		ld a, [csav]
+	else
 		ldh a, [csav]
+	endc
 		cp c 				; Check if ’de’ empty (no hex digits).
 		jr z, .escape 		; Yes, generate ESC sequence.
+	if def(WOZMON_WRAM_ONLY)
+		ld a, [mode]
+	else
 		ldh a, [mode]
+	endc
 		bit 6, a 			; Test MODE byte.
 		jr z, .notstor 		; B6=1 STOR, 0 for XAM and BLOCK XAM
 		ld a, e 			; LSD’s of hex data.
@@ -193,7 +220,11 @@ wozmon:
 		call .prbyte 		; Output it in hex format.
 	.xamnext
 		xor a
+	if def(WOZMON_WRAM_ONLY)
+		ld [mode], a 		; 0->MODE (XAM mode).
+	else
 		ldh [mode], a 		; 0->MODE (XAM mode).
+	endc
 		ld a, l
 		cp e 				; Compare ‘examine index’ to hex data.
 		ld a, h
