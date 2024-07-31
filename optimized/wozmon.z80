@@ -101,10 +101,10 @@ wozmon:
 	endc
 		cp "\n"				; LF?
 		jr nz, .notcr 		; No.
-		xor a 				; For XAM mode.
 	if def(WOZMON_HRAM_ONLY)
 		ld c, low(in)-1 	; Reset text index.
 	else
+		xor a 				; For XAM mode.
 		ld c, a 			; Reset text index.
 	endc
 	.setblock
