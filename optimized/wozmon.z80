@@ -1,6 +1,11 @@
 ;  The WOZ Monitor for the Apple 1
 ;  Written by Steve Wozniak in 1976
 
+; The chrin and chrout subroutines are expected to save the registers bc, de and hl. 
+; chrin can modify f and returns the character in a.
+; chrout outputs the character in a and can modify af.
+; If chrout modifies a, WOZMON_CHROUT_MODIFIES_A needs to be defined.
+
 export wozmon
 
 section "wozmon variables", hram
@@ -18,7 +23,7 @@ mode: 				ds 1						; $00=XAM, $74=STOR, $B8=BLOCK XAM
 ; register ’c’ is now what used to be the Y register
 
 section "wozmon input buffer", wramx, align[8, 1]
-in: 				ds $ff			;  Input buffer
+in: 				ds $ff			;  Input buffer from $??01 to $??ff (255 bytes)
 
 section "wozmon code", romx
 	wozmon.notcr
@@ -34,7 +39,7 @@ wozmon:
 		ld a, "\\"			; "\".
 		call chrout			; Output it.
 	.getline
-		ld a, "\n"			; CR.
+		ld a, "\n"			; LF.
 		call chrout			; Output it.
 		ld c, $fe			; Initialize text index.
 	.backspace
@@ -44,9 +49,10 @@ wozmon:
 		call chrin			; Load character.
 		ld [bc], a 			; Add to text buffer.
 	; This is the only call to chrout where the ’a’ register cannot be modified
-	; --- push af
 		call chrout 		; Display character.
-	; --- pop af
+	if def(WOZMON_CHROUT_MODIFIES_A)
+		ld a, [bc] 
+	endc
 		cp "\n"				; LF?
 		jr nz, .notcr 		; No.
 		xor a 				; For XAM mode.
