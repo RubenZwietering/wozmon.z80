@@ -1,10 +1,19 @@
 ;  The WOZ Monitor for the Apple 1
 ;  Written by Steve Wozniak in 1976
+;  The WOZ Monitor for the Gameboy (SM83/GBZ80)
+;  Edited by Ruben Zwietering in 2024
 
 ; The chrin and chrout subroutines are expected to save the registers bc, de and hl. 
 ; chrin can modify f and returns the character in a.
 ; chrout outputs the character in a and can modify af.
 ; If chrout modifies a, WOZMON_CHROUT_MODIFIES_A needs to be defined.
+; By default uses HRAM for the variables and WRAM for the input buffer.
+; Use option WOZMON_HRAM_ONLY to not use WRAM or the stack.
+; Use option WOZMON_WRAM_ONLY to not use HRAM.
+
+; 189 bytes of machine code.
+;  +4 bytes with WOZMON_WRAM_ONLY.
+;  +1 byte with WOZMON_CHROUT_MODIFIES_A.
 
 export wozmon
 
@@ -40,217 +49,218 @@ in: 				ds $40			;  Input buffer from $ff80 to $ffbf (64 bytes)
 
 else
 
-section "wozmon input buffer", wramx, align[8, 1]
+section "wozmon input buffer", wramx, align[8, 1] 	; Aligned to a 256 byte boundary offset by one
 in: 				ds $ff			;  Input buffer from $??01 to $??ff (255 bytes)
 
 endc
 
 section "wozmon code", romx
 	wozmon.notcr
-		cp $08				; "\b"?
-		jr z, wozmon.backspace	; Yes.
-		cp $1b				; ESC?
-		jr z, wozmon.escape		; Yes.
-	if def(WOZMON_HRAM_ONLY)
-		inc c				; Advance text index.
-		bit 6, c
-		jr z, wozmon.nextchar 	; Auto ESC if > $bf.
-	else
-		dec c				; Advance text index.
-		jr nz, wozmon.nextchar 	; Auto ESC if == 0.
-	endc
+			cp $08				; "\b"?
+			jr z, wozmon.backspace	; Yes.
+			cp $1b				; ESC?
+			jr z, wozmon.escape		; Yes.
+		if def(WOZMON_HRAM_ONLY)
+			inc c				; Advance text index.
+			bit 6, c
+			jr z, wozmon.nextchar 	; Auto ESC if > $bf.
+		else
+			dec c				; Advance text index.
+			jr nz, wozmon.nextchar 	; Auto ESC if == 0.
+		endc
 wozmon:
-	if !def(WOZMON_HRAM_ONLY)
-		ld b, high(in)
-	endc
+		if !def(WOZMON_HRAM_ONLY)
+			ld b, high(in)
+		endc
 	.escape
-		ld a, "\\"			; "\".
-		call chrout			; Output it.
+			ld a, "\\"			; "\".
+			call chrout			; Output it.
 	.getline
-		ld a, "\n"			; LF.
-		call chrout			; Output it.
-	if def(WOZMON_HRAM_ONLY)
-		ld c, low(in)+1 	; Initialize text index.
-	else
-		ld c, $fe			; Initialize text index.
-	endc
+			ld a, "\n"			; LF.
+			call chrout			; Output it.
+		if def(WOZMON_HRAM_ONLY)
+			ld c, low(in)+1 	; Initialize text index.
+		else
+			ld c, $fe			; Initialize text index.
+		endc
 	.backspace
-	if def(WOZMON_HRAM_ONLY)
-		dec c				; Back up text index.
-		bit 6, c
-		jr nz, .getline 	; Beyond start of line, reinitialize.
-	else
-		inc c				; Back up text index.
-		jr z, .getline 		; Beyond start of line, reinitialize.
-	endc
+		if def(WOZMON_HRAM_ONLY)
+			dec c				; Back up text index.
+			bit 6, c
+			jr nz, .getline 	; Beyond start of line, reinitialize.
+		else
+			inc c				; Back up text index.
+			jr z, .getline 		; Beyond start of line, reinitialize.
+		endc
 	.nextchar
-		call chrin			; Load character.
-	if def(WOZMON_HRAM_ONLY)
-		ldh [c], a 			; Add to text buffer.
-	else
-		ld [bc], a 			; Add to text buffer.
-	endc
-	; This is the only call to chrout where the ’a’ register cannot be modified
-		call chrout 		; Display character.
-	if def(WOZMON_CHROUT_MODIFIES_A)
-	if def(WOZMON_HRAM_ONLY)
-		ldh a, [c]
-	else
-		ld a, [bc]
-	endc
-	endc
-		cp "\n"				; LF?
-		jr nz, .notcr 		; No.
-	if def(WOZMON_HRAM_ONLY)
-		ld c, low(in)-1 	; Reset text index.
-	else
-		xor a 				; For XAM mode.
-		ld c, a 			; Reset text index.
-	endc
+			call chrin			; Load character.
+		if def(WOZMON_HRAM_ONLY)
+			ldh [c], a 			; Add to text buffer.
+		else
+			ld [bc], a 			; Add to text buffer.
+		endc
+		; This is the only call to chrout where the ’a’ register cannot be modified
+			call chrout 		; Display character.
+		if def(WOZMON_CHROUT_MODIFIES_A)
+		if def(WOZMON_HRAM_ONLY)
+			ldh a, [c]
+		else
+			ld a, [bc]
+		endc
+		endc
+			cp "\n"				; LF?
+			jr nz, .notcr 		; No.
+		if def(WOZMON_HRAM_ONLY)
+								; XAM mode. "\n" << 2 leaves bit 6 and 7 at 0.
+			ld c, low(in)-1 	; Reset text index.
+		else
+			xor a 				; For XAM mode.
+			ld c, a 			; Reset text index.
+		endc
 	.setblock
-		add a 				; Leaves $B8 if setting BLOK XAM mode.
+			add a 				; Leaves $B8 if setting BLOK XAM mode.
 	.setstor
-		add a				; Leaves $74 if setting STOR mode.
-	if def(WOZMON_WRAM_ONLY)
-		ld [mode], a 		; $00 = XAM, $74 = STOR, $B8 = BLOK XAM.
-	else
-		ldh [mode], a 		; $00 = XAM, $74 = STOR, $B8 = BLOK XAM.
-	endc
+			add a				; Leaves $74 if setting STOR mode.
+		if def(WOZMON_WRAM_ONLY)
+			ld [mode], a 		; $00 = XAM, $74 = STOR, $B8 = BLOK XAM.
+		else
+			ldh [mode], a 		; $00 = XAM, $74 = STOR, $B8 = BLOK XAM.
+		endc
 	.blskip
-	if def(WOZMON_HRAM_ONLY)
-		inc c 				; Advance text index.
-	else
-		dec c 				; Advance text index.
-	endc
+		if def(WOZMON_HRAM_ONLY)
+			inc c 				; Advance text index.
+		else
+			dec c 				; Advance text index.
+		endc
 	.nextitem
-	if def(WOZMON_HRAM_ONLY)
-		ldh a, [c] 			; Get character.
-	else
-		ld a, [bc] 			; Get character.
-	endc
-		cp "\n" 			; LF?
-		jr z, .getline 		; Yes, done this line.
-		cp "." 				; "."?
-		jr c, .blskip 		; Skip delimiter.
-		jr z, .setblock 	; Set BLOCK XAM mode.
-		cp ":" 				; ":"?
-		jr z, .setstor 		; Yes. Set STOR mode.
-		cp "R" 				; "R"?
-		jr z, .run 			; Yes. Run user program.
-		ld de, 0 			; $00->Hex value parsing.
-		ld a, c
-	if def(WOZMON_WRAM_ONLY)
-		ld [csav], a 		; Save ’c’ for comparison.
-	else
-		ldh [csav], a 		; Save ’c’ for comparison.
-	endc
+		if def(WOZMON_HRAM_ONLY)
+			ldh a, [c] 			; Get character.
+		else
+			ld a, [bc] 			; Get character.
+		endc
+			cp "\n" 			; LF?
+			jr z, .getline 		; Yes, done this line.
+			cp "." 				; "."?
+			jr c, .blskip 		; Skip delimiter.
+			jr z, .setblock 	; Set BLOCK XAM mode.
+			cp ":" 				; ":"?
+			jr z, .setstor 		; Yes. Set STOR mode.
+			cp "R" 				; "R"?
+			jr z, .run 			; Yes. Run user program.
+			ld de, 0 			; $00->Hex value parsing.
+			ld a, c
+		if def(WOZMON_WRAM_ONLY)
+			ld [csav], a 		; Save ’c’ for comparison.
+		else
+			ldh [csav], a 		; Save ’c’ for comparison.
+		endc
 	.nexthex
-	if def(WOZMON_HRAM_ONLY)
-		ldh a, [c] 			; Get character.
-	else
-		ld a, [bc] 			; Get character for hex test.
-	endc
-		xor "0" 			; Map digits to $0-9.
-		cp 10 				; Digit?
-		jr c, .dig 			; Yes.
-		add $89 			; Map letter "A"-"F" to $FA-FF.
-		cp $fa 				; Hex letter?
-		jr c, .nothex 		; No, character not hex.
+		if def(WOZMON_HRAM_ONLY)
+			ldh a, [c] 			; Get character for hex test.
+		else
+			ld a, [bc] 			; Get character for hex test.
+		endc
+			xor "0" 			; Map digits to $0-9.
+			cp 10 				; Digit?
+			jr c, .dig 			; Yes.
+			add $89 			; Map letter "A"-"F" to $FA-FF.
+			cp $fa 				; Hex letter?
+			jr c, .nothex 		; No, character not hex.
 	.dig
-	if !def(WOZMON_HRAM_ONLY)
-		push bc
-	endc
-		ld b, 4 			; Shift count.
+		if !def(WOZMON_HRAM_ONLY)
+			push bc
+		endc
+			ld b, 4 			; Shift count.
 	.hexshift
-		sla e 				; Rotate into LSD.
-		rl d 				; Rotate into MSD’s.
-		dec b 				; Done 4 shifts?
-		jr nz, .hexshift 	; No, loop.
-	if !def(WOZMON_HRAM_ONLY)
-		pop bc
-	endc
-		and $0f 			; Hex digit to LSD of ’a’.
-		or e
-		ld e, a 			; LSD of ’a’ to LSD of ’e’
-	if def(WOZMON_HRAM_ONLY)
-		inc c 				; Advance text index.
-	else
-		dec c 				; Advance text index.
-	endc
-		jr .nexthex 		; Check next character for hex.
+			sla e 				; Rotate into LSD.
+			rl d 				; Rotate into MSD’s.
+			dec b 				; Done 4 shifts?
+			jr nz, .hexshift 	; No, loop.
+		if !def(WOZMON_HRAM_ONLY)
+			pop bc
+		endc
+			and $0f 			; Hex digit to LSD of ’a’.
+			or e
+			ld e, a 			; LSD of ’a’ to LSD of ’e’
+		if def(WOZMON_HRAM_ONLY)
+			inc c 				; Advance text index.
+		else
+			dec c 				; Advance text index.
+		endc
+			jr .nexthex 		; Check next character for hex.
 	.nothex
-	if def(WOZMON_WRAM_ONLY)
-		ld a, [csav]
-	else
-		ldh a, [csav]
-	endc
-		cp c 				; Check if ’de’ empty (no hex digits).
-		jr z, .escape 		; Yes, generate ESC sequence.
-	if def(WOZMON_WRAM_ONLY)
-		ld a, [mode]
-	else
-		ldh a, [mode]
-	endc
-		bit 6, a 			; Test MODE byte.
-		jr z, .notstor 		; B6=1 STOR, 0 for XAM and BLOCK XAM
-		ld a, e 			; LSD’s of hex data.
-		ldi [hl], a 		; Store at current ‘store index’. Increment store index.
-		jr .nextitem 		; Get next command item.
+		if def(WOZMON_WRAM_ONLY)
+			ld a, [csav]
+		else
+			ldh a, [csav]
+		endc
+			cp c 				; Check if ’de’ empty (no hex digits).
+			jr z, .escape 		; Yes, generate ESC sequence.
+		if def(WOZMON_WRAM_ONLY)
+			ld a, [mode]
+		else
+			ldh a, [mode]
+		endc
+			bit 6, a 			; Test MODE byte.
+			jr z, .notstor 		; B6=1 STOR, 0 for XAM and BLOCK XAM
+			ld a, e 			; LSD’s of hex data.
+			ldi [hl], a 		; Store at current ‘store index’. Increment store index.
+			jr .nextitem 		; Get next command item.
 	.run
-		jp hl 				; Run at current XAM index.
+			jp hl 				; Run at current XAM index.
 	.notstor
-		bit 7, a
-		jr nz, .xamnext 	; B7=0 for XAM, 1 for BLOCK XAM.
-		ld l, e
-		ld h, d
+			bit 7, a
+			jr nz, .xamnext 	; B7=0 for XAM, 1 for BLOCK XAM.
+			ld l, e
+			ld h, d
 	.nxtprnt
-		jr nz, .prdata 		; NE means no address to print.
-		ld a, "\n" 			; LF.
-		call chrout 		; Output it.
-		ld a, h 			; ‘Examine index’ high-order byte.
-		call .prbyte 		; Output it in hex format.
-		ld a, l 			; Low-order ‘examine index’ byte.
-		call .prbyte 		; Output it in hex format.
-		ld a, ":" 			; ":".
-		call chrout 		; Output it.
+			jr nz, .prdata 		; NE means no address to print.
+			ld a, "\n" 			; LF.
+			call chrout 		; Output it.
+			ld a, h 			; ‘Examine index’ high-order byte.
+			call .prbyte 		; Output it in hex format.
+			ld a, l 			; Low-order ‘examine index’ byte.
+			call .prbyte 		; Output it in hex format.
+			ld a, ":" 			; ":".
+			call chrout 		; Output it.
 	.prdata
-		ld a, " " 			; Blank.
-		call chrout 		; Output it.
-		ld a, [hl] 			; Get data byte at ‘examine index’.
-		call .prbyte 		; Output it in hex format.
+			ld a, " " 			; Blank.
+			call chrout 		; Output it.
+			ld a, [hl] 			; Get data byte at ‘examine index’.
+			call .prbyte 		; Output it in hex format.
 	.xamnext
-		xor a
-	if def(WOZMON_WRAM_ONLY)
-		ld [mode], a 		; 0->MODE (XAM mode).
-	else
-		ldh [mode], a 		; 0->MODE (XAM mode).
-	endc
-		ld a, l
-		cp e 				; Compare ‘examine index’ to hex data.
-		ld a, h
-		sbc d
-		jr nc, .nextitem 	; Not less, so no more data to output.
-		inc hl
-		ld a, l 			; Check low-order ‘examine index’ byte
-		and $03 			; For MOD 4=0
-		jr .nxtprnt
+			xor a
+		if def(WOZMON_WRAM_ONLY)
+			ld [mode], a 		; 0->MODE (XAM mode).
+		else
+			ldh [mode], a 		; 0->MODE (XAM mode).
+		endc
+			ld a, l
+			cp e 				; Compare ‘examine index’ to hex data.
+			ld a, h
+			sbc d
+			jr nc, .nextitem 	; Not less, so no more data to output.
+			inc hl
+			ld a, l 			; Check low-order ‘examine index’ byte
+			and $03 			; For MOD 4=0
+			jr .nxtprnt
 	.prbyte
-	if def(WOZMON_HRAM_ONLY)
-		ld b, a 			; Save ’a’ for LSD.
-	else
-		push af 			; Save ’a’ for LSD.
-	endc
-		swap a 				; MSD to LSD position.
-		call .prhex 		; Output hex digit.
-	if def(WOZMON_HRAM_ONLY)
-		ld a, b 			; Restore ’a’.
-	else
-		pop af 				; Restore ’a’.
-	endc
+		if def(WOZMON_HRAM_ONLY)
+			ld b, a 			; Save ’a’ for LSD.
+		else
+			push af 			; Save ’a’ for LSD.
+		endc
+			swap a 				; MSD to LSD position.
+			call .prhex 		; Output hex digit.
+		if def(WOZMON_HRAM_ONLY)
+			ld a, b 			; Restore ’a’.
+		else
+			pop af 				; Restore ’a’.
+		endc
 	.prhex
-		and $0f 			; Mask LSD for hex print.
-		or "0" 				; Add "0".
-		cp "0"+10 			; Digit?
-		jp c, chrout 		; Yes, output it.
-		add $07 			; Add offset for letter.
-		jp chrout 			; Output character.
+			and $0f 			; Mask LSD for hex print.
+			or "0" 				; Add "0".
+			cp "0"+10 			; Digit?
+			jp c, chrout 		; Yes, output it.
+			add "A"-("0"+$a) 	; Add offset for letter.
+			jp chrout 			; Output character.

@@ -1,5 +1,7 @@
 ;  The WOZ Monitor for the Apple 1
 ;  Written by Steve Wozniak in 1976
+;  The WOZ Monitor for the Gameboy (SM83/GBZ80)
+;  Edited by Ruben Zwietering in 2024
 ; 
 ; ; Page 0 Variables
 SECTION "WOZMON VARIABLES", HRAM
