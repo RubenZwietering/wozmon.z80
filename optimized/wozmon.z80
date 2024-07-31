@@ -81,19 +81,17 @@ wozmon:
 		cp $fa 				; Hex letter?
 		jr c, .nothex 		; No, character not hex.
 	.dig
-		add a
-		add a 				; Hex digit to MSD of ’a’.
-		add a
-		add a
 		push bc
 		ld b, 4 			; Shift count.
 	.hexshift
-		add a 				; Hex digit left, MSB to carry.
-		rl e 				; Rotate into LSD.
+		sla e 				; Rotate into LSD.
 		rl d 				; Rotate into MSD’s.
 		dec b 				; Done 4 shifts?
 		jr nz, .hexshift 	; No, loop.
 		pop bc
+		and $0f 			; Hex digit to LSD of ’a’.
+		or e
+		ld e, a 			; LSD of ’a’ to LSD of ’e’
 		dec c 				; Advance text index.
 		jr .nexthex 		; Check next character for hex.
 	.nothex
