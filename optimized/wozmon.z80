@@ -22,8 +22,17 @@ mode: 				ds 1						; $00=XAM, $74=STOR, $B8=BLOCK XAM
 ; register ’b’ is now what used to be the X register
 ; register ’c’ is now what used to be the Y register
 
+if def(WOZMON_HRAM_ONLY)
+
+section "wozmon input buffer", hram[$ff80] 	; Start of HRAM
+in: 				ds $40			;  Input buffer from $ff80 to $ffbf (64 bytes)
+
+else
+
 section "wozmon input buffer", wramx, align[8, 1]
 in: 				ds $ff			;  Input buffer from $??01 to $??ff (255 bytes)
+
+endc
 
 section "wozmon code", romx
 	wozmon.notcr
@@ -31,41 +40,79 @@ section "wozmon code", romx
 		jr z, wozmon.backspace	; Yes.
 		cp $1b				; ESC?
 		jr z, wozmon.escape		; Yes.
+	if def(WOZMON_HRAM_ONLY)
+		inc c				; Advance text index.
+		bit 6, c
+		jr z, wozmon.nextchar 	; Auto ESC if > $bf.
+	else
 		dec c				; Advance text index.
 		jr nz, wozmon.nextchar 	; Auto ESC if == 0.
+	endc
 wozmon:
+	if !def(WOZMON_HRAM_ONLY)
 		ld b, high(in)
+	endc
 	.escape
 		ld a, "\\"			; "\".
 		call chrout			; Output it.
 	.getline
 		ld a, "\n"			; LF.
 		call chrout			; Output it.
+	if def(WOZMON_HRAM_ONLY)
+		ld c, low(in)+1 	; Initialize text index.
+	else
 		ld c, $fe			; Initialize text index.
+	endc
 	.backspace
+	if def(WOZMON_HRAM_ONLY)
+		dec c				; Back up text index.
+		bit 6, c
+		jr nz, .getline 	; Beyond start of line, reinitialize.
+	else
 		inc c				; Back up text index.
 		jr z, .getline 		; Beyond start of line, reinitialize.
+	endc
 	.nextchar
 		call chrin			; Load character.
+	if def(WOZMON_HRAM_ONLY)
+		ldh [c], a 			; Add to text buffer.
+	else
 		ld [bc], a 			; Add to text buffer.
+	endc
 	; This is the only call to chrout where the ’a’ register cannot be modified
 		call chrout 		; Display character.
 	if def(WOZMON_CHROUT_MODIFIES_A)
-		ld a, [bc] 
+	if def(WOZMON_HRAM_ONLY)
+		ldh a, [c]
+	else
+		ld a, [bc]
+	endc
 	endc
 		cp "\n"				; LF?
 		jr nz, .notcr 		; No.
 		xor a 				; For XAM mode.
+	if def(WOZMON_HRAM_ONLY)
+		ld c, low(in)-1 	; Reset text index.
+	else
 		ld c, a 			; Reset text index.
+	endc
 	.setblock
 		add a 				; Leaves $B8 if setting BLOK XAM mode.
 	.setstor
 		add a				; Leaves $74 if setting STOR mode.
 		ldh [mode], a 		; $00 = XAM, $74 = STOR, $B8 = BLOK XAM.
 	.blskip
+	if def(WOZMON_HRAM_ONLY)
+		inc c 				; Advance text index.
+	else
 		dec c 				; Advance text index.
+	endc
 	.nextitem
+	if def(WOZMON_HRAM_ONLY)
+		ldh a, [c] 			; Get character.
+	else
 		ld a, [bc] 			; Get character.
+	endc
 		cp "\n" 			; LF?
 		jr z, .getline 		; Yes, done this line.
 		cp "." 				; "."?
@@ -79,7 +126,11 @@ wozmon:
 		ld a, c
 		ldh [csav], a 		; Save ’c’ for comparison.
 	.nexthex
+	if def(WOZMON_HRAM_ONLY)
+		ldh a, [c] 			; Get character.
+	else
 		ld a, [bc] 			; Get character for hex test.
+	endc
 		xor "0" 			; Map digits to $0-9.
 		cp 10 				; Digit?
 		jr c, .dig 			; Yes.
@@ -87,18 +138,26 @@ wozmon:
 		cp $fa 				; Hex letter?
 		jr c, .nothex 		; No, character not hex.
 	.dig
+	if !def(WOZMON_HRAM_ONLY)
 		push bc
+	endc
 		ld b, 4 			; Shift count.
 	.hexshift
 		sla e 				; Rotate into LSD.
 		rl d 				; Rotate into MSD’s.
 		dec b 				; Done 4 shifts?
 		jr nz, .hexshift 	; No, loop.
+	if !def(WOZMON_HRAM_ONLY)
 		pop bc
+	endc
 		and $0f 			; Hex digit to LSD of ’a’.
 		or e
 		ld e, a 			; LSD of ’a’ to LSD of ’e’
+	if def(WOZMON_HRAM_ONLY)
+		inc c 				; Advance text index.
+	else
 		dec c 				; Advance text index.
+	endc
 		jr .nexthex 		; Check next character for hex.
 	.nothex
 		ldh a, [csav]
@@ -145,10 +204,18 @@ wozmon:
 		and $03 			; For MOD 4=0
 		jr .nxtprnt
 	.prbyte
+	if def(WOZMON_HRAM_ONLY)
+		ld b, a 			; Save ’a’ for LSD.
+	else
 		push af 			; Save ’a’ for LSD.
+	endc
 		swap a 				; MSD to LSD position.
 		call .prhex 		; Output hex digit.
+	if def(WOZMON_HRAM_ONLY)
+		ld a, b 			; Restore ’a’.
+	else
 		pop af 				; Restore ’a’.
+	endc
 	.prhex
 		and $0f 			; Mask LSD for hex print.
 		or "0" 				; Add "0".
